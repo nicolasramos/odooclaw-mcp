@@ -1,7 +1,9 @@
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import patch, MagicMock
-from odoo_mcp.core.security import validate_model_access, validate_write_fields, validate_unlink
+
 from odoo_mcp.core.exceptions import OdooSecurityError
+from odoo_mcp.core.security import validate_model_access, validate_unlink, validate_write_fields
 
 
 def test_allowlist_success():

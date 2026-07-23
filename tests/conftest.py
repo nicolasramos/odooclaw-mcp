@@ -1,12 +1,13 @@
 """Pytest configuration and fixtures for Odoo MCP Server tests."""
 
 import os
-import pytest
-from typing import Generator
-from unittest.mock import Mock, patch
+from collections.abc import Generator
+from unittest.mock import patch
 
-from odoo_mcp.core import OdooClient, OdooSession
+import pytest
+
 from odoo_mcp.config import DEFAULT_SEARCH_LIMIT
+from odoo_mcp.core import OdooClient, OdooSession
 
 
 @pytest.fixture
