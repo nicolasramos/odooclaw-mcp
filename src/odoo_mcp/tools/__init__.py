@@ -1,17 +1,17 @@
 """Tools layer - MCP tools that orchestrate services."""
 
 from odoo_mcp.tools import (
-    records,
+    accounting,
     actions,
+    business_ops,
+    chatter,
+    generic,
     introspection,
     partners,
-    purchases,
-    accounting,
-    chatter,
     projects,
+    purchases,
+    records,
     sales,
-    generic,
-    business_ops,
 )
 
 __all__ = [

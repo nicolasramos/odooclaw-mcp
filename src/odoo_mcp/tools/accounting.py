@@ -1,7 +1,7 @@
 from odoo_mcp.core.client import OdooClient
-from odoo_mcp.services.invoice_service import create_vendor_invoice
 from odoo_mcp.security.audit import audit_action
 from odoo_mcp.security.guards import guard_model_access
+from odoo_mcp.services.invoice_service import create_vendor_invoice
 
 
 def odoo_create_vendor_invoice(

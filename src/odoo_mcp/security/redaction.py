@@ -1,6 +1,7 @@
-from typing import Any, Dict, List
+from typing import Any
 
-def redact_sensitive_values(data: Dict[str, Any]) -> Dict[str, Any]:
+
+def redact_sensitive_values(data: dict[str, Any]) -> dict[str, Any]:
     """Recursively redacts sensitive values like passwords or tokens before returning to LLM."""
     if not isinstance(data, dict):
         return data

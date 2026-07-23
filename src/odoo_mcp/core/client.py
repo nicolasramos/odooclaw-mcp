@@ -1,8 +1,10 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import requests
-from .session import OdooSession
+
 from .exceptions import OdooRPCError
+from .session import OdooSession
 
 _logger = logging.getLogger(__name__)
 
@@ -21,9 +23,9 @@ class OdooClient:
         self,
         model: str,
         method: str,
-        args: Optional[List[Any]] = None,
-        kwargs: Optional[Dict[str, Any]] = None,
-        sender_id: Optional[int] = None,
+        args: list[Any] | None = None,
+        kwargs: dict[str, Any] | None = None,
+        sender_id: int | None = None,
     ) -> Any:
         """
         Executes a method on an Odoo model using standard Odoo JSON-RPC endpoint.
@@ -74,15 +76,15 @@ class OdooClient:
             return True
 
         except requests.RequestException as e:
-            raise OdooRPCError(f"Network error during RPC call: {str(e)}")
+            raise OdooRPCError(f"Network error during RPC call: {str(e)}") from e
 
     def try_call_kw(
         self,
         model: str,
         method: str,
-        args: Optional[List[Any]] = None,
-        kwargs: Optional[Dict[str, Any]] = None,
-        sender_id: Optional[int] = None,
+        args: list[Any] | None = None,
+        kwargs: dict[str, Any] | None = None,
+        sender_id: int | None = None,
         default: Any = None,
     ) -> Any:
         try:
@@ -90,17 +92,17 @@ class OdooClient:
         except OdooRPCError:
             return default
 
-    def get_model_fields(self, model: str, sender_id: Optional[int] = None) -> Dict[str, Any]:
+    def get_model_fields(self, model: str, sender_id: int | None = None) -> dict[str, Any]:
         return self.call_kw(model, "fields_get", sender_id=sender_id)
 
     def try_get_model_fields(
-        self, model: str, sender_id: Optional[int] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, model: str, sender_id: int | None = None
+    ) -> dict[str, Any] | None:
         return self.try_call_kw(model, "fields_get", sender_id=sender_id, default=None)
 
-    def model_exists(self, model: str, sender_id: Optional[int] = None) -> bool:
+    def model_exists(self, model: str, sender_id: int | None = None) -> bool:
         return self.try_get_model_fields(model, sender_id=sender_id) is not None
 
-    def field_exists(self, model: str, field_name: str, sender_id: Optional[int] = None) -> bool:
+    def field_exists(self, model: str, field_name: str, sender_id: int | None = None) -> bool:
         fields = self.try_get_model_fields(model, sender_id=sender_id)
         return bool(fields and field_name in fields)

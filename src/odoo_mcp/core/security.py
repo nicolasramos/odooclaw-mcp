@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any
 
 from odoo_mcp.security.guards import (
     guard_model_access,
@@ -11,7 +11,7 @@ def validate_model_access(model_name: str) -> None:
     guard_model_access(model_name)
 
 
-def validate_write_fields(values: Dict[str, Any]) -> None:
+def validate_write_fields(values: dict[str, Any]) -> None:
     guard_write_fields(values)
 
 

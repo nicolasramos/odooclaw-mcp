@@ -1,7 +1,7 @@
 from odoo_mcp.core.client import OdooClient
-from odoo_mcp.services.partner_service import find_partner, get_partner_summary
 from odoo_mcp.security.audit import audit_action
 from odoo_mcp.security.guards import guard_model_access
+from odoo_mcp.services.partner_service import find_partner, get_partner_summary
 
 
 def odoo_find_partner(

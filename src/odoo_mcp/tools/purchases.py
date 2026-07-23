@@ -1,7 +1,7 @@
 from odoo_mcp.core.client import OdooClient
-from odoo_mcp.services.purchase_service import create_purchase_order
 from odoo_mcp.security.audit import audit_action
 from odoo_mcp.security.guards import guard_model_access
+from odoo_mcp.services.purchase_service import create_purchase_order
 
 
 def odoo_create_purchase_order(

@@ -1,12 +1,11 @@
 from contextvars import ContextVar
-from typing import Optional
 
 from odoo_mcp.observability.audit import log_audit_event
 
-_current_session_uid: ContextVar[Optional[int]] = ContextVar("current_session_uid", default=None)
+_current_session_uid: ContextVar[int | None] = ContextVar("current_session_uid", default=None)
 
 
-def set_session_uid(uid: Optional[int]) -> None:
+def set_session_uid(uid: int | None) -> None:
     _current_session_uid.set(uid)
 
 

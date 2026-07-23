@@ -1,6 +1,6 @@
-from typing import Any, Dict, List, Optional
-from odoo_mcp.core.client import OdooClient
 import logging
+
+from odoo_mcp.core.client import OdooClient
 
 _logger = logging.getLogger(__name__)
 
@@ -10,9 +10,9 @@ def create_calendar_event(
     name: str,
     start: str,
     stop: str,
-    partner_ids: Optional[List[int]] = None,
+    partner_ids: list[int] | None = None,
     allday: bool = False,
-    description: Optional[str] = None
+    description: str | None = None
 ) -> int:
     """Create a new calendar event (appointment) in Odoo."""
     vals = {
@@ -21,14 +21,14 @@ def create_calendar_event(
         "stop": stop,
         "allday": allday,
     }
-    
+
     if description:
         vals["description"] = description
-        
+
     if partner_ids:
         # Use the (6, 0, [IDs]) pattern for many2many fields
         vals["partner_ids"] = [(6, 0, partner_ids)]
-        
+
     try:
         event_id = client.call_kw("calendar.event", "create", args=[vals])
         return event_id

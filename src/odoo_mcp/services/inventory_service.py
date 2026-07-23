@@ -1,6 +1,7 @@
-from typing import Any, Dict, List, Optional
-from odoo_mcp.core.client import OdooClient
 import logging
+from typing import Any
+
+from odoo_mcp.core.client import OdooClient
 
 _logger = logging.getLogger(__name__)
 
@@ -8,13 +9,13 @@ def get_product_stock(
     client: OdooClient,
     sender_id: int,
     product_id: int,
-    location_id: Optional[int] = None
-) -> List[Dict[str, Any]]:
+    location_id: int | None = None
+) -> list[dict[str, Any]]:
     """Get stock availability for a product."""
     domain = [("product_id", "=", product_id)]
     if location_id:
         domain.append(("location_id", "=", location_id))
-    
+
     # Check if stock.quant exists, otherwise fallback or error
     try:
         fields = ["location_id", "quantity", "reserved_quantity"]

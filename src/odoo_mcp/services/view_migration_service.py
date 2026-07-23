@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import difflib
 import re
-from datetime import datetime, timezone
-from uuid import uuid4
 import xml.etree.ElementTree as ET
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
+from uuid import uuid4
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.audit import log_audit_event
@@ -17,7 +17,7 @@ from odoo_mcp.services.capability_service import (
 _VIEW_MODELS = {"ir.ui.view", "ir.model.data", "ir.actions.report"}
 
 
-def _parse_xmlid(xmlid: str) -> Optional[tuple[str, str]]:
+def _parse_xmlid(xmlid: str) -> tuple[str, str] | None:
     if not xmlid or "." not in xmlid:
         return None
     module, name = xmlid.split(".", 1)
@@ -30,8 +30,8 @@ def _resolve_xmlid(
     client: OdooClient,
     sender_id: int,
     xmlid: str,
-    expected_model: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    expected_model: str | None = None,
+) -> dict[str, Any] | None:
     parsed = _parse_xmlid(xmlid)
     if not parsed:
         return None
@@ -53,7 +53,7 @@ def _resolve_xmlid(
     return row
 
 
-def _is_well_formed_xml(xml_text: str) -> tuple[bool, Optional[str]]:
+def _is_well_formed_xml(xml_text: str) -> tuple[bool, str | None]:
     try:
         ET.fromstring(xml_text)
         return True, None
@@ -68,7 +68,7 @@ def _normalize_xpath(xpath: str) -> str:
     return trimmed
 
 
-def _count_xpath_matches(xml_text: str, xpath: str) -> tuple[int, Optional[str]]:
+def _count_xpath_matches(xml_text: str, xpath: str) -> tuple[int, str | None]:
     try:
         root = ET.fromstring(xml_text)
     except ET.ParseError as exc:
@@ -292,7 +292,7 @@ def _build_apply_snapshot(
 ) -> dict[str, Any]:
     return {
         "snapshot_id": str(uuid4()),
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "kind": kind,
         "rollback_action": "deactivate_created_view",
         "created_view_id": created_view_id,
@@ -398,7 +398,7 @@ def find_views_by_model(
     client: OdooClient,
     sender_id: int,
     model: str,
-    view_type: Optional[str] = None,
+    view_type: str | None = None,
     limit: int = 50,
 ) -> dict[str, Any]:
     domain: list[list[Any]] = [["model", "=", model]]
@@ -510,7 +510,7 @@ def scan_view_migration_issues(
     sender_id: int,
     xmlid: str,
     target_version: str,
-    rule_sets: Optional[list[str]] = None,
+    rule_sets: list[str] | None = None,
 ) -> dict[str, Any]:
     view_response = get_view_by_xmlid(
         client, sender_id, xmlid, include_inherited_chain=False
@@ -546,7 +546,7 @@ def scan_report_migration_issues(
     sender_id: int,
     xmlid: str,
     target_version: str,
-    rule_sets: Optional[list[str]] = None,
+    rule_sets: list[str] | None = None,
 ) -> dict[str, Any]:
     report_response = get_report_template(client, sender_id, xmlid)
     if not report_response.get("ok"):
@@ -581,7 +581,7 @@ def propose_view_patch(
     sender_id: int,
     xmlid: str,
     intent: str,
-    constraints: Optional[dict[str, Any]] = None,
+    constraints: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     scan = scan_view_migration_issues(client, sender_id, xmlid, target_version="18.0")
     if not scan.get("ok"):
@@ -617,7 +617,7 @@ def propose_report_patch(
     sender_id: int,
     xmlid: str,
     intent: str,
-    constraints: Optional[dict[str, Any]] = None,
+    constraints: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     scan = scan_report_migration_issues(client, sender_id, xmlid, target_version="18.0")
     if not scan.get("ok"):
@@ -861,7 +861,7 @@ def test_view_compilation(
     client: OdooClient,
     sender_id: int,
     view_xmlid: str,
-    context: Optional[dict[str, Any]] = None,
+    context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     view_response = get_view_by_xmlid(
         client, sender_id, view_xmlid, include_inherited_chain=False
@@ -924,7 +924,7 @@ def apply_view_patch_safe(
     strict: bool = True,
     confirm: bool = False,
     dry_run: bool = False,
-    inherited_view_name: Optional[str] = None,
+    inherited_view_name: str | None = None,
     priority: int = 90,
 ) -> dict[str, Any]:
     view_response = get_view_by_xmlid(
@@ -1057,7 +1057,7 @@ def apply_report_patch_safe(
     strict: bool = True,
     confirm: bool = False,
     dry_run: bool = False,
-    inherited_view_name: Optional[str] = None,
+    inherited_view_name: str | None = None,
     priority: int = 90,
 ) -> dict[str, Any]:
     report_response = get_report_template(client, sender_id, report_xmlid)
@@ -1350,7 +1350,7 @@ def assist_view_migration(
     xmlid: str,
     target_version: str = "18.0",
     intent: str = "migrate",
-    constraints: Optional[dict[str, Any]] = None,
+    constraints: dict[str, Any] | None = None,
     strict: bool = True,
     include_compile_test: bool = True,
 ) -> dict[str, Any]:
@@ -1432,7 +1432,7 @@ def assist_report_migration(
     xmlid: str,
     target_version: str = "18.0",
     intent: str = "migrate",
-    constraints: Optional[dict[str, Any]] = None,
+    constraints: dict[str, Any] | None = None,
     strict: bool = True,
 ) -> dict[str, Any]:
     scan = scan_report_migration_issues(
@@ -1611,7 +1611,7 @@ def batch_assist_view_migration(
     xmlids: list[str],
     target_version: str = "18.0",
     intent: str = "migrate",
-    constraints: Optional[dict[str, Any]] = None,
+    constraints: dict[str, Any] | None = None,
     strict: bool = True,
     include_compile_test: bool = False,
     continue_on_error: bool = True,
@@ -1677,7 +1677,7 @@ def batch_assist_report_migration(
     xmlids: list[str],
     target_version: str = "18.0",
     intent: str = "migrate",
-    constraints: Optional[dict[str, Any]] = None,
+    constraints: dict[str, Any] | None = None,
     strict: bool = True,
     continue_on_error: bool = True,
 ) -> dict[str, Any]:

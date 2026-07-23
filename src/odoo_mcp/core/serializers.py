@@ -1,6 +1,7 @@
-from typing import Any, Dict, List
+from typing import Any
 
-def serialize_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+
+def serialize_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Clean up standard record reads."""
     res = []
     for r in records:
@@ -14,7 +15,7 @@ def serialize_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         res.append(cleaned)
     return res
 
-def serialize_schema(schema: Dict[str, Any]) -> str:
+def serialize_schema(schema: dict[str, Any]) -> str:
     """Minify the schema output so it does not overwhelm the LLM token context."""
     import json
     # You could filter out base fields (create_date etc.) if not requested

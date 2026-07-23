@@ -1,7 +1,8 @@
 from odoo_mcp.core.client import OdooClient
-from odoo_mcp.services.sales_service import find_sale_order, get_sale_order_summary
 from odoo_mcp.security.audit import audit_action
 from odoo_mcp.security.guards import guard_model_access
+from odoo_mcp.services.sales_service import find_sale_order, get_sale_order_summary
+
 
 def odoo_find_sale_order(client: OdooClient, user_id: int, name: str = None, partner_id: int = None, state: str = None, limit: int = 10) -> list:
     guard_model_access("sale.order")

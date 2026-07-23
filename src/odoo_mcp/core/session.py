@@ -1,6 +1,8 @@
-import requests
 import logging
-from typing import Dict, Any, Optional
+from typing import Any
+
+import requests
+
 from .exceptions import OdooAuthError
 
 _logger = logging.getLogger(__name__)
@@ -14,9 +16,9 @@ class OdooSession:
         self.username = username
         self.password = password
         self.session = requests.Session()
-        self.uid: Optional[int] = None
-        self.session_id: Optional[str] = None
-        self.context: Dict[str, Any] = {}
+        self.uid: int | None = None
+        self.session_id: str | None = None
+        self.context: dict[str, Any] = {}
 
     def authenticate(self) -> None:
         """Authenticates with Odoo using the /web/session/authenticate endpoint."""
@@ -51,7 +53,7 @@ class OdooSession:
             _logger.info(f"Successfully authenticated as UID {self.uid}")
 
         except requests.RequestException as e:
-            raise OdooAuthError(f"Network error during authentication: {str(e)}")
+            raise OdooAuthError(f"Network error during authentication: {str(e)}") from e
 
     def is_authenticated(self) -> bool:
         """Check if we have an active session UID."""

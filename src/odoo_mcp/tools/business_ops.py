@@ -2,13 +2,13 @@ from odoo_mcp.core.client import OdooClient
 from odoo_mcp.security.audit import audit_action
 from odoo_mcp.security.guards import guard_model_access
 from odoo_mcp.services.chatter_service import (
-    create_activity_summary,
     close_activity_with_reason,
+    create_activity_summary,
 )
 from odoo_mcp.services.contract_service import (
+    close_contract_line,
     create_contract_line,
     replace_contract_line,
-    close_contract_line,
 )
 from odoo_mcp.services.helpdesk_service import (
     create_helpdesk_ticket,

@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
@@ -9,9 +9,9 @@ _logger = get_logger("project_service")
 def find_task(
     client: OdooClient,
     user_id: int,
-    name: Optional[str] = None,
-    project_id: Optional[int] = None,
-    stage_id: Optional[int] = None,
+    name: str | None = None,
+    project_id: int | None = None,
+    stage_id: int | None = None,
     limit: int = 10,
 ) -> list:
     domain: list[tuple[str, str, Any]] = []
@@ -39,10 +39,10 @@ def create_task(
     client: OdooClient,
     user_id: int,
     name: str,
-    project_id: Optional[int] = None,
-    description: Optional[str] = None,
-    assigned_to: Optional[int] = None,
-    deadline: Optional[str] = None,
+    project_id: int | None = None,
+    description: str | None = None,
+    assigned_to: int | None = None,
+    deadline: str | None = None,
 ) -> int:
     values: dict[str, Any] = {"name": name}
     if project_id:
@@ -62,9 +62,9 @@ def update_task(
     client: OdooClient,
     user_id: int,
     task_id: int,
-    stage_id: Optional[int] = None,
-    assigned_to: Optional[int] = None,
-    deadline: Optional[str] = None,
+    stage_id: int | None = None,
+    assigned_to: int | None = None,
+    deadline: str | None = None,
 ) -> bool:
     values: dict[str, Any] = {}
     if stage_id:
@@ -86,10 +86,10 @@ def update_task(
 def find_my_tasks(
     client: OdooClient,
     user_id: int,
-    project_id: Optional[int] = None,
-    state: Optional[str] = None,
-    date_deadline_from: Optional[str] = None,
-    date_deadline_to: Optional[str] = None,
+    project_id: int | None = None,
+    state: str | None = None,
+    date_deadline_from: str | None = None,
+    date_deadline_to: str | None = None,
     limit: int = 20,
 ) -> list:
     domain: list[tuple[str, str, Any]] = [("user_ids", "in", [user_id])]
@@ -131,9 +131,9 @@ def update_task_status(
     client: OdooClient,
     user_id: int,
     task_id: int,
-    stage_id: Optional[int] = None,
-    stage_name: Optional[str] = None,
-    comment: Optional[str] = None,
+    stage_id: int | None = None,
+    stage_name: str | None = None,
+    comment: str | None = None,
 ) -> dict:
     tasks = client.call_kw(
         "project.task",

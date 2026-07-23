@@ -1,8 +1,7 @@
+import logging
 from datetime import date as date_cls
-from typing import Optional
 
 from odoo_mcp.core.client import OdooClient
-import logging
 
 _logger = logging.getLogger(__name__)
 
@@ -10,9 +9,9 @@ _logger = logging.getLogger(__name__)
 def _resolve_employee_id(
     client: OdooClient,
     sender_id: int,
-    employee_id: Optional[int] = None,
-    user_id: Optional[int] = None,
-) -> Optional[int]:
+    employee_id: int | None = None,
+    user_id: int | None = None,
+) -> int | None:
     if employee_id:
         return employee_id
 
@@ -32,10 +31,10 @@ def _resolve_employee_id(
 def find_attendance(
     client: OdooClient,
     sender_id: int,
-    user_id: Optional[int] = None,
-    employee_id: Optional[int] = None,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
+    user_id: int | None = None,
+    employee_id: int | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     limit: int = 50,
 ) -> list:
     if not client.model_exists("hr.attendance", sender_id=sender_id):
@@ -82,8 +81,8 @@ def log_timesheet(
     name: str,
     unit_amount: float,
     date: str,
-    task_id: Optional[int] = None,
-    employee_id: Optional[int] = None,
+    task_id: int | None = None,
+    employee_id: int | None = None,
 ) -> int:
     """Log a new timesheet entry."""
     vals = {
@@ -114,8 +113,8 @@ def log_task_timesheet(
     task_id: int,
     name: str,
     unit_amount: float,
-    date: Optional[str] = None,
-    employee_id: Optional[int] = None,
+    date: str | None = None,
+    employee_id: int | None = None,
 ) -> int:
     if not client.model_exists("project.task", sender_id=sender_id):
         raise ValueError("Model project.task is not available in this Odoo instance")

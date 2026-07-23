@@ -1,4 +1,3 @@
-from typing import Optional
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
@@ -10,18 +9,18 @@ from odoo_mcp.services.capability_service import (
 _logger = get_logger("helpdesk_service")
 
 
-def _helpdesk_fields(client: OdooClient, user_id: int) -> Optional[dict]:
+def _helpdesk_fields(client: OdooClient, user_id: int) -> dict | None:
     return client.try_get_model_fields("helpdesk.ticket")
 
 
 def _ticket_values(
     fields: dict,
     name: str,
-    description: Optional[str] = None,
-    partner_id: Optional[int] = None,
-    email: Optional[str] = None,
-    team_id: Optional[int] = None,
-    priority: Optional[str] = None,
+    description: str | None = None,
+    partner_id: int | None = None,
+    email: str | None = None,
+    team_id: int | None = None,
+    priority: str | None = None,
 ) -> dict:
     values = {"name": name}
     if description and "description" in fields:
@@ -46,11 +45,11 @@ def create_helpdesk_ticket(
     client: OdooClient,
     user_id: int,
     name: str,
-    description: Optional[str] = None,
-    partner_id: Optional[int] = None,
-    email: Optional[str] = None,
-    team_id: Optional[int] = None,
-    priority: Optional[str] = None,
+    description: str | None = None,
+    partner_id: int | None = None,
+    email: str | None = None,
+    team_id: int | None = None,
+    priority: str | None = None,
 ) -> dict:
     fields = _helpdesk_fields(client, user_id)
     if not fields:
@@ -86,9 +85,9 @@ def create_helpdesk_ticket_from_partner(
     user_id: int,
     partner_id: int,
     name: str,
-    description: Optional[str] = None,
-    team_id: Optional[int] = None,
-    priority: Optional[str] = None,
+    description: str | None = None,
+    team_id: int | None = None,
+    priority: str | None = None,
 ) -> dict:
     partner = client.call_kw(
         "res.partner",
@@ -131,7 +130,7 @@ def draft_ticket_email(
     ticket_id: int,
     subject: str,
     body: str,
-    email_to: Optional[str] = None,
+    email_to: str | None = None,
 ) -> dict:
     helpdesk_fields = _helpdesk_fields(client, user_id)
     compose_fields = client.try_get_model_fields(

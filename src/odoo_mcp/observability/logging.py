@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 
 _LOG_LEVELS = {
     "DEBUG": logging.DEBUG,

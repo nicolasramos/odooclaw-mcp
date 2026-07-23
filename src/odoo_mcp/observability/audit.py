@@ -1,4 +1,3 @@
-from typing import Optional
 
 from odoo_mcp.observability.logging import get_logger
 
@@ -11,7 +10,7 @@ def log_audit_event(
     model: str,
     details: dict,
     status: str = "SUCCESS",
-    session_uid: Optional[int] = None,
+    session_uid: int | None = None,
 ):
     if session_uid is not None and session_uid != user_id:
         _audit_logger.info(

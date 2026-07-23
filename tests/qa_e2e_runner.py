@@ -1,14 +1,27 @@
+import logging
 import os
 import sys
-import json
-import logging
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
-from odoo_mcp.server import get_odoo_client, odoo_get_partner_summary, odoo_create_activity, odoo_list_pending_activities
-from odoo_mcp.server import odoo_find_task, odoo_find_sale_order, odoo_get_sale_order_summary, odoo_search
-from odoo_mcp.schemas.business import GetPartnerSummarySchema, CreateActivitySchema, ListPendingActivitiesSchema
-from odoo_mcp.schemas.business import FindTaskSchema, FindSaleOrderSchema, GetSaleOrderSummarySchema
+from odoo_mcp.schemas.business import (
+    CreateActivitySchema,
+    FindSaleOrderSchema,
+    FindTaskSchema,
+    GetPartnerSummarySchema,
+    GetSaleOrderSummarySchema,
+    ListPendingActivitiesSchema,
+)
 from odoo_mcp.schemas.records import OdooSearchSchema
+from odoo_mcp.server import (
+    get_odoo_client,
+    odoo_create_activity,
+    odoo_find_sale_order,
+    odoo_find_task,
+    odoo_get_partner_summary,
+    odoo_get_sale_order_summary,
+    odoo_list_pending_activities,
+    odoo_search,
+)
 
 # Mute logger info noise so we only see our test output
 logging.getLogger("server").setLevel(logging.CRITICAL)
@@ -34,7 +47,7 @@ def run_tests():
     try:
         res = odoo_search(OdooSearchSchema(model="res.partner", domain=[], limit=1, sender_id=uid))
         partner_id = res[0]
-        summary = odoo_get_partner_summary(GetPartnerSummarySchema(partner_id=partner_id, sender_id=uid))
+        odoo_get_partner_summary(GetPartnerSummarySchema(partner_id=partner_id, sender_id=uid))
         print_ok("3.1 Partner Summary (Válido)", f"Partner ID {partner_id}")
     except Exception as e:
         print_fail("3.1 Partner Summary (Válido)", f"{str(e)} res={repr(res)}")
@@ -49,21 +62,21 @@ def run_tests():
             print_fail("3.1 Partner Inexistente", "No devolvió error object -> " + str(res))
     except Exception as e:
         print_ok("3.1 Partner Inexistente", f"Lanzó error correctamente. Detalle: {str(e)[:50]}...")
-        
+
     # Crear Actividad
     try:
         act_id = odoo_create_activity(CreateActivitySchema(model="res.partner", res_id=partner_id, summary="Prueba E2E", sender_id=uid))
         print_ok("3.2 Crear Actividad", f"Creada con ID {act_id}")
     except Exception as e:
         print_fail("3.2 Crear Actividad", str(e))
-        
+
     # Listar Actividades
     try:
         acts = odoo_list_pending_activities(ListPendingActivitiesSchema(model="res.partner", sender_id=uid))
         print_ok("3.3 Listar Actividades Pts", f"Recuperadas: {len(acts)}")
     except Exception as e:
         print_fail("3.3 Listar Actividades Pts", str(e))
-        
+
     # Tareas
     try:
         tasks = odoo_find_task(FindTaskSchema(limit=3, sender_id=uid))
@@ -73,7 +86,7 @@ def run_tests():
             print_ok("4.1 Buscar `project.task`", "PASS - Módulo 'project' no está instalado")
         else:
             print_fail("4.1 Buscar `project.task`", str(e))
-        
+
     # Pedidos de venta
     try:
         sales = odoo_find_sale_order(FindSaleOrderSchema(limit=3, sender_id=uid))

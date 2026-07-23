@@ -1,176 +1,176 @@
 import os
 import sys
-from typing import Any
 from functools import lru_cache
-from mcp.server.fastmcp import FastMCP
-from dotenv import load_dotenv
+from typing import Any
 
-from odoo_mcp.core.session import OdooSession
+from dotenv import load_dotenv
+from mcp.server.fastmcp import FastMCP
+
 from odoo_mcp.core.client import OdooClient
+from odoo_mcp.core.session import OdooSession
 from odoo_mcp.observability.logging import get_logger
 from odoo_mcp.observability.metrics import measure_time
-from odoo_mcp.security.audit import set_session_uid, audit_action
-from odoo_mcp.security.guards import guard_model_access
-
-from odoo_mcp.tools import (
-    records,
-    actions,
-    introspection,
-    partners,
-    purchases,
-    accounting,
-    chatter,
-    projects,
-    sales,
-    generic,
-    business_ops,
-)
-from odoo_mcp.schemas.records import (
-    OdooSearchSchema,
-    OdooReadSchema,
-    OdooSearchReadSchema,
-    OdooCreateSchema,
-    OdooWriteSchema,
-)
 from odoo_mcp.schemas.actions import OdooInvokeActionSchema
 from odoo_mcp.schemas.business import (
-    FindPartnerSchema,
-    CreatePurchaseOrderSchema,
-    CreateVendorInvoiceSchema,
-    GetPartnerSummarySchema,
-    CreateActivitySchema,
-    ListPendingActivitiesSchema,
-    MarkActivityDoneSchema,
-    PostChatterMessageSchema,
-    FindTaskSchema,
-    CreateTaskSchema,
-    UpdateTaskSchema,
-    FindMyTasksSchema,
-    UpdateTaskStatusSchema,
-    FindSaleOrderSchema,
-    GetSaleOrderSummarySchema,
-    GetRecordSummarySchema,
-    FindPendingInvoicesSchema,
-    GetInvoiceSummarySchema,
-    GetModelSchemaSchema,
-    CreateCalendarEventSchema,
-    CreateSaleOrderSchema,
-    ConfirmSaleOrderSchema,
-    CreateLeadSchema,
-    GetProductStockSchema,
-    LogTimesheetSchema,
-    FindAttendanceSchema,
-    LogTaskTimesheetSchema,
+    ApplyReportPatchSafeSchema,
+    ApplyViewPatchSafeSchema,
+    ApproveExpenseSchema,
+    AssistReportMigrationSchema,
+    AssistViewMigrationSchema,
+    BatchAssistReportMigrationSchema,
+    BatchAssistViewMigrationSchema,
     CheckInSchema,
     CheckOutSchema,
-    GetMyTodaySummarySchema,
+    CloseActivityWithReasonSchema,
+    CloseContractLineSchema,
+    ConfirmSaleOrderSchema,
+    CreateActivitySchema,
+    CreateActivitySummarySchema,
+    CreateCalendarEventSchema,
+    CreateContractLineSchema,
     CreateExpenseReportSchema,
-    SubmitExpenseReportSchema,
-    ApproveExpenseSchema,
+    CreateHelpdeskTicketFromPartnerSchema,
+    CreateHelpdeskTicketSchema,
+    CreateJournalEntrySchema,
+    CreateLeadSchema,
+    CreatePurchaseOrderSchema,
+    CreateSaleOrderSchema,
+    CreateTaskSchema,
+    CreateVendorBillFromOCRValidatedSchema,
+    CreateVendorInvoiceSchema,
+    DraftTicketEmailSchema,
+    FindAttendanceSchema,
     FindMissingTimesheetsSchema,
-    SuggestTimesheetFromAttendanceSchema,
-    NotifyPendingActionsSchema,
-    RegisterPaymentSchema,
+    FindMyTasksSchema,
+    FindPartnerSchema,
+    FindPendingInvoicesSchema,
+    FindSaleOrderSchema,
+    FindTaskSchema,
     FindUnreconciledBankLinesSchema,
-    SuggestBankReconciliationSchema,
+    FindViewsByModelSchema,
+    GetARAPAgingSchema,
+    GetCapabilitiesSchema,
+    GetInvoiceSummarySchema,
+    GetModelSchemaSchema,
+    GetMyTodaySummarySchema,
+    GetPartnerSummarySchema,
+    GetProductStockSchema,
+    GetRecordSummarySchema,
+    GetReportTemplateSchema,
+    GetSaleOrderSummarySchema,
+    GetTaxSummarySchema,
+    GetViewByXmlIdSchema,
+    ListPendingActivitiesSchema,
+    LogTaskTimesheetSchema,
+    LogTimesheetSchema,
+    MarkActivityDoneSchema,
+    NotifyPendingActionsSchema,
+    PostChatterMessageSchema,
+    PostJournalEntrySchema,
+    PreviewReportPatchSchema,
+    PreviewViewPatchSchema,
+    ProposeReportPatchSchema,
+    ProposeViewPatchSchema,
     ReconcileBankLineSchema,
     RegisterInvoicePaymentSchema,
-    GetARAPAgingSchema,
-    RunPeriodCloseChecksSchema,
-    CreateJournalEntrySchema,
-    PostJournalEntrySchema,
-    GetTaxSummarySchema,
-    ValidateVendorBillDuplicateSchema,
-    SuggestExpenseAccountAndTaxesSchema,
-    CreateVendorBillFromOCRValidatedSchema,
-    GetViewByXmlIdSchema,
-    FindViewsByModelSchema,
-    GetReportTemplateSchema,
-    ScanViewMigrationIssuesSchema,
-    ScanReportMigrationIssuesSchema,
-    ProposeViewPatchSchema,
-    ProposeReportPatchSchema,
-    ValidateViewPatchSchema,
-    ValidateReportPatchSchema,
-    PreviewViewPatchSchema,
-    PreviewReportPatchSchema,
-    TestViewCompilationSchema,
-    ApplyViewPatchSafeSchema,
-    ApplyReportPatchSafeSchema,
-    RollbackPatchSafeSchema,
-    AssistViewMigrationSchema,
-    AssistReportMigrationSchema,
-    VisualizeViewPatchSchema,
-    VisualizeReportPatchSchema,
-    BatchAssistViewMigrationSchema,
-    BatchAssistReportMigrationSchema,
-    GetCapabilitiesSchema,
-    CreateHelpdeskTicketSchema,
-    CreateHelpdeskTicketFromPartnerSchema,
-    CreateActivitySummarySchema,
-    CloseActivityWithReasonSchema,
-    DraftTicketEmailSchema,
-    CreateContractLineSchema,
+    RegisterPaymentSchema,
     ReplaceContractLineSchema,
-    CloseContractLineSchema,
+    RollbackPatchSafeSchema,
+    RunPeriodCloseChecksSchema,
+    ScanReportMigrationIssuesSchema,
+    ScanViewMigrationIssuesSchema,
+    SubmitExpenseReportSchema,
+    SuggestBankReconciliationSchema,
+    SuggestExpenseAccountAndTaxesSchema,
+    SuggestTimesheetFromAttendanceSchema,
+    TestViewCompilationSchema,
+    UpdateTaskSchema,
+    UpdateTaskStatusSchema,
+    ValidateReportPatchSchema,
+    ValidateVendorBillDuplicateSchema,
+    ValidateViewPatchSchema,
+    VisualizeReportPatchSchema,
+    VisualizeViewPatchSchema,
 )
+from odoo_mcp.schemas.records import (
+    OdooCreateSchema,
+    OdooReadSchema,
+    OdooSearchReadSchema,
+    OdooSearchSchema,
+    OdooWriteSchema,
+)
+from odoo_mcp.security.audit import audit_action, set_session_uid
+from odoo_mcp.security.guards import guard_model_access
+from odoo_mcp.services.accounting_service import (
+    create_journal_entry,
+    create_vendor_bill_from_ocr_validated,
+    find_unreconciled_bank_lines,
+    get_ar_ap_aging,
+    get_tax_summary,
+    post_journal_entry,
+    reconcile_bank_line,
+    register_invoice_payment,
+    run_period_close_checks,
+    suggest_bank_reconciliation,
+    suggest_expense_account_and_taxes,
+    validate_vendor_bill_duplicate,
+)
+from odoo_mcp.services.calendar_service import create_calendar_event
+from odoo_mcp.services.crm_service import create_lead
+from odoo_mcp.services.hr_service import find_attendance, log_task_timesheet, log_timesheet
+from odoo_mcp.services.inventory_service import get_product_stock
 from odoo_mcp.services.invoice_service import (
     find_pending_invoices,
     get_invoice_summary,
     register_payment,
 )
-from odoo_mcp.services.accounting_service import (
-    find_unreconciled_bank_lines,
-    suggest_bank_reconciliation,
-    reconcile_bank_line,
-    register_invoice_payment,
-    get_ar_ap_aging,
-    run_period_close_checks,
-    create_journal_entry,
-    post_journal_entry,
-    get_tax_summary,
-    validate_vendor_bill_duplicate,
-    suggest_expense_account_and_taxes,
-    create_vendor_bill_from_ocr_validated,
-)
-from odoo_mcp.services.calendar_service import create_calendar_event
-from odoo_mcp.services.sales_service import create_sale_order, confirm_sale_order
-from odoo_mcp.services.crm_service import create_lead
-from odoo_mcp.services.inventory_service import get_product_stock
-from odoo_mcp.services.hr_service import log_timesheet, find_attendance, log_task_timesheet
-from odoo_mcp.services.workforce_service import (
-    check_in,
-    check_out,
-    get_my_today_summary,
-    create_expense_report,
-    submit_expense_report,
-    approve_expense,
-    find_missing_timesheets,
-    suggest_timesheet_from_attendance,
-    notify_pending_actions,
-)
+from odoo_mcp.services.sales_service import confirm_sale_order, create_sale_order
 from odoo_mcp.services.view_migration_service import (
-    get_view_by_xmlid,
+    apply_report_patch_safe,
+    apply_view_patch_safe,
+    assist_report_migration,
+    assist_view_migration,
+    batch_assist_report_migration,
+    batch_assist_view_migration,
     find_views_by_model,
     get_report_template,
-    scan_view_migration_issues,
-    scan_report_migration_issues,
-    propose_view_patch,
-    propose_report_patch,
-    validate_view_patch,
-    validate_report_patch,
-    preview_view_patch,
+    get_view_by_xmlid,
     preview_report_patch,
-    test_view_compilation,
-    apply_view_patch_safe,
-    apply_report_patch_safe,
+    preview_view_patch,
+    propose_report_patch,
+    propose_view_patch,
     rollback_patch_safe,
-    assist_view_migration,
-    assist_report_migration,
-    visualize_view_patch,
+    scan_report_migration_issues,
+    scan_view_migration_issues,
+    test_view_compilation,
+    validate_report_patch,
+    validate_view_patch,
     visualize_report_patch,
-    batch_assist_view_migration,
-    batch_assist_report_migration,
+    visualize_view_patch,
+)
+from odoo_mcp.services.workforce_service import (
+    approve_expense,
+    check_in,
+    check_out,
+    create_expense_report,
+    find_missing_timesheets,
+    get_my_today_summary,
+    notify_pending_actions,
+    submit_expense_report,
+    suggest_timesheet_from_attendance,
+)
+from odoo_mcp.tools import (
+    accounting,
+    actions,
+    business_ops,
+    chatter,
+    generic,
+    introspection,
+    partners,
+    projects,
+    purchases,
+    records,
+    sales,
 )
 
 _logger = get_logger("server")
@@ -260,8 +260,9 @@ def get_odoo18_fields_reference() -> str:
 
 @mcp.resource("odoo://models")
 def get_odoo_models() -> str:
-    from odoo_mcp.config import DEFAULT_ALLOWED_MODELS
     import json
+
+    from odoo_mcp.config import DEFAULT_ALLOWED_MODELS
 
     return json.dumps(sorted(DEFAULT_ALLOWED_MODELS), indent=2)
 
@@ -284,8 +285,9 @@ def get_resource_record_summary(model: str, id: str) -> str:
 @mcp.resource("odoo://record/{model}/{id}/chatter_summary")
 def get_resource_chatter_summary(model: str, id: str) -> str:
     client = get_odoo_client()
-    from odoo_mcp.services.generic_service import get_chatter_summary
     import json
+
+    from odoo_mcp.services.generic_service import get_chatter_summary
 
     res = get_chatter_summary(client, client.odoo_session.uid, model, int(id))
     return json.dumps(res, indent=2)
