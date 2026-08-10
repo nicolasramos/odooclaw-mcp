@@ -1,6 +1,5 @@
 import time
 from contextlib import contextmanager
-
 from odoo_mcp.observability.logging import get_logger
 
 _metrics_logger = get_logger("metrics")

@@ -1,20 +1,13 @@
-from contextvars import ContextVar
-
+# The audit implementation logic is delegated to observability/audit.py
+# This serves as a namespace export for security boundary checks.
 from odoo_mcp.observability.audit import log_audit_event
 
-_current_session_uid: ContextVar[int | None] = ContextVar("current_session_uid", default=None)
-
-
-def set_session_uid(uid: int | None) -> None:
-    _current_session_uid.set(uid)
-
-
 def audit_action(action: str, user_id: int, model: str, ids: list, values: dict = None):
+    """Facade for security-level audit logging."""
     details = {"ids": ids}
     if values:
+        # Avoid logging the exact details of huge payloads or passwords
         from .redaction import redact_sensitive_values
-
         details["values"] = redact_sensitive_values(values)
-
-    session_uid = _current_session_uid.get()
-    log_audit_event(action, user_id, model, details, session_uid=session_uid)
+        
+    log_audit_event(action, user_id, model, details)

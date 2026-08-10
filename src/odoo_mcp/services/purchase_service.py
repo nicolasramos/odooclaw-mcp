@@ -12,13 +12,13 @@ def create_purchase_order(client: OdooClient, user_id: int, partner_id: int, lin
         "partner_id": partner_id,
         "order_line": []
     }
-
+    
     for line in lines:
         order_vals["order_line"].append((0, 0, {
             "product_id": line["product_id"],
             "product_qty": line.get("product_qty", 1.0),
             "price_unit": line.get("price_unit", 0.0)
         }))
-
+        
     _logger.info(f"Creating PO for partner {partner_id} with {len(lines)} lines")
-    return client.call_kw("purchase.order", "create", args=[order_vals])
+    return client.call_kw("purchase.order", "create", args=[order_vals], sender_id=user_id)
