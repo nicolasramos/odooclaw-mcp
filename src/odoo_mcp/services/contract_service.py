@@ -1,3 +1,4 @@
+from typing import Optional
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.services.capability_service import (
@@ -6,15 +7,15 @@ from odoo_mcp.services.capability_service import (
 )
 
 
-def _line_fields(client: OdooClient, user_id: int) -> dict | None:
-    return client.try_get_model_fields("contract.line")
+def _line_fields(client: OdooClient, user_id: int) -> Optional[dict]:
+    return client.try_get_model_fields("contract.line", sender_id=user_id)
 
 
-def _contract_fields(client: OdooClient, user_id: int) -> dict | None:
-    return client.try_get_model_fields("contract.contract")
+def _contract_fields(client: OdooClient, user_id: int) -> Optional[dict]:
+    return client.try_get_model_fields("contract.contract", sender_id=user_id)
 
 
-def _first_present(fields: dict, *names: str) -> str | None:
+def _first_present(fields: dict, *names: str) -> Optional[str]:
     for name in names:
         if name in fields:
             return name
@@ -33,12 +34,12 @@ def create_contract_line(
     client: OdooClient,
     user_id: int,
     contract_id: int,
-    product_id: int | None = None,
-    name: str | None = None,
-    quantity: float | None = None,
-    price_unit: float | None = None,
-    date_start: str | None = None,
-    date_end: str | None = None,
+    product_id: Optional[int] = None,
+    name: Optional[str] = None,
+    quantity: Optional[float] = None,
+    price_unit: Optional[float] = None,
+    date_start: Optional[str] = None,
+    date_end: Optional[str] = None,
 ) -> dict:
     line_fields = _line_fields(client, user_id)
     contract_fields = _contract_fields(client, user_id)
@@ -67,7 +68,7 @@ def create_contract_line(
         values["date_end"] = date_end
 
     line_id = client.call_kw(
-        "contract.line", "create", args=[values]
+        "contract.line", "create", args=[values], sender_id=user_id
     )
     return build_success_response(
         "contracts.create_line", line_id=line_id, values=values
@@ -78,8 +79,8 @@ def close_contract_line(
     client: OdooClient,
     user_id: int,
     line_id: int,
-    reason: str | None = None,
-    close_date: str | None = None,
+    reason: Optional[str] = None,
+    close_date: Optional[str] = None,
 ) -> dict:
     line_fields = _line_fields(client, user_id)
     if not line_fields:
@@ -103,7 +104,7 @@ def close_contract_line(
         )
 
     client.call_kw(
-        "contract.line", "write", args=[[line_id], values]
+        "contract.line", "write", args=[[line_id], values], sender_id=user_id
     )
     return build_success_response(
         "contracts.close_line", line_id=line_id, values=values
@@ -114,13 +115,13 @@ def replace_contract_line(
     client: OdooClient,
     user_id: int,
     line_id: int,
-    product_id: int | None = None,
-    name: str | None = None,
-    quantity: float | None = None,
-    price_unit: float | None = None,
-    date_start: str | None = None,
-    date_end: str | None = None,
-    close_reason: str | None = None,
+    product_id: Optional[int] = None,
+    name: Optional[str] = None,
+    quantity: Optional[float] = None,
+    price_unit: Optional[float] = None,
+    date_start: Optional[str] = None,
+    date_end: Optional[str] = None,
+    close_reason: Optional[str] = None,
 ) -> dict:
     line_fields = _line_fields(client, user_id)
     if not line_fields:

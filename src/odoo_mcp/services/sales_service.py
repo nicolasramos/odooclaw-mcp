@@ -41,3 +41,32 @@ def get_sale_order_summary(client: OdooClient, user_id: int, order_id: int) -> d
         "total": order.get("amount_total"),
         "lines": lines_info
     }
+
+
+def create_sale_order(client: OdooClient, sender_id: int, partner_id: int, lines: list) -> int:
+    """Create a new sale.order with the provided lines."""
+    order_vals = {
+        "partner_id": partner_id,
+        "order_line": []
+    }
+    
+    for line in lines:
+        line_vals = {
+            "product_id": line.product_id,
+            "product_uom_qty": line.product_uom_qty,
+        }
+        if line.price_unit is not None:
+            line_vals["price_unit"] = line.price_unit
+            
+        # Odoo format for creation in one2many: (0, 0, values_dict)
+        order_vals["order_line"].append((0, 0, line_vals))
+        
+    order_id = client.call_kw("sale.order", "create", args=[order_vals], sender_id=sender_id)
+    return order_id
+
+
+def confirm_sale_order(client: OdooClient, sender_id: int, order_id: int) -> bool:
+    """Confirm a sale.order (moves it from draft/sent to sale)."""
+    # Equivalent to clicking "Confirm" button
+    client.call_kw("sale.order", "action_confirm", args=[[order_id]], sender_id=sender_id)
+    return True

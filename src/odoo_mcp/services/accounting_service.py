@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Optional
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.services.capability_service import (
@@ -11,7 +11,7 @@ from odoo_mcp.services.capability_service import (
 )
 
 
-def _parse_iso_date(value: str | None, fallback: date | None = None) -> date:
+def _parse_iso_date(value: Optional[str], fallback: Optional[date] = None) -> date:
     if value:
         return datetime.strptime(value, "%Y-%m-%d").date()
     if fallback:
@@ -28,7 +28,235 @@ def _safe_float(value: Any) -> float:
         return 0.0
 
 
-def _date_domain(field_name: str, date_from: str | None, date_to: str | None) -> list:
+
+
+def _safe_int(value: Any) -> Optional[int]:
+    if value in (None, False, ""):
+        return None
+    if isinstance(value, (list, tuple)) and value:
+        value = value[0]
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _first_text(payload: dict[str, Any], keys: list[str]) -> str:
+    for key in keys:
+        value = payload.get(key)
+        if value not in (None, False, ""):
+            return str(value).strip()
+    return ""
+
+
+def _safe_field_exists(
+    client: OdooClient, model: str, field_name: str, sender_id: int
+) -> bool:
+    try:
+        return bool(client.field_exists(model, field_name, sender_id=sender_id))
+    except Exception:
+        return False
+
+
+def _line_amount(line: dict[str, Any]) -> float:
+    for key in ("line_total", "price_total", "amount_total", "subtotal", "price_subtotal"):
+        if line.get(key) not in (None, False, ""):
+            return _safe_float(line.get(key))
+    return _safe_float(line.get("quantity") or 1.0) * _safe_float(line.get("price_unit"))
+
+
+def _validate_ocr_total(
+    payload: dict[str, Any], lines: list[dict[str, Any]], tolerance: float
+) -> dict[str, Any]:
+    expected = payload.get("amount_total")
+    if expected in (None, False, ""):
+        return {
+            "status": "not_provided",
+            "within_tolerance": True,
+            "message": "OCR total was not provided; total guard was not applied.",
+        }
+
+    expected_total = _safe_float(expected)
+    calculated_total = round(sum(_line_amount(line) for line in lines), 2)
+    difference = round(calculated_total - expected_total, 2)
+    within_tolerance = abs(difference) <= max(float(tolerance), 0.0)
+    return {
+        "status": "ok" if within_tolerance else "mismatch",
+        "within_tolerance": within_tolerance,
+        "ocr_total": round(expected_total, 2),
+        "calculated_total": calculated_total,
+        "difference": difference,
+        "tolerance": tolerance,
+    }
+
+
+def _resolve_vendor_from_ocr(
+    client: OdooClient, sender_id: int, payload: dict[str, Any]
+) -> tuple[Optional[int], dict[str, Any]]:
+    explicit_partner_id = _safe_int(payload.get("partner_id"))
+    if explicit_partner_id:
+        return explicit_partner_id, {
+            "status": "explicit",
+            "partner_id": explicit_partner_id,
+            "risk_level": "low",
+            "candidates": [],
+        }
+
+    if not client.model_exists("res.partner", sender_id=sender_id):
+        return None, {
+            "status": "unsupported",
+            "risk_level": "high",
+            "message": "res.partner model is not available to resolve the vendor.",
+            "candidates": [],
+        }
+
+    attempts: list[tuple[str, str, list[list[Any]]]] = []
+    vat = _first_text(payload, ["vat", "vendor_vat", "supplier_vat", "tax_id"])
+    if vat:
+        attempts.append(("vat", vat, [["vat", "=", vat]]))
+    ref = _first_text(payload, ["partner_ref", "supplier_ref", "vendor_ref", "ref_supplier"])
+    if ref:
+        attempts.append(("ref", ref, [["ref", "=", ref]]))
+    name = _first_text(payload, ["vendor_name", "partner_name", "supplier_name", "commercial_name"])
+    if name:
+        domain = [["name", "ilike", name]]
+        if _safe_field_exists(client, "res.partner", "supplier_rank", sender_id):
+            domain.append(["supplier_rank", ">", 0])
+        attempts.append(("name", name, domain))
+
+    all_candidates: list[dict[str, Any]] = []
+    fields = ["id", "name", "vat", "ref"]
+    has_supplier_rank = _safe_field_exists(
+        client, "res.partner", "supplier_rank", sender_id
+    )
+    if has_supplier_rank:
+        fields.append("supplier_rank")
+    if _safe_field_exists(client, "res.partner", "commercial_partner_id", sender_id):
+        fields.append("commercial_partner_id")
+
+    for method, value, domain in attempts:
+        candidates = client.call_kw(
+            "res.partner",
+            "search_read",
+            args=[domain],
+            kwargs={
+                "fields": fields,
+                "limit": 5,
+                "order": "supplier_rank desc, id asc" if has_supplier_rank else "id asc",
+            },
+            sender_id=sender_id,
+        )
+        for candidate in candidates:
+            all_candidates.append({**candidate, "matched_by": method, "matched_value": value})
+        if len(candidates) == 1:
+            return _safe_int(candidates[0].get("id")), {
+                "status": "resolved",
+                "partner_id": _safe_int(candidates[0].get("id")),
+                "matched_by": method,
+                "risk_level": "low",
+                "candidates": candidates,
+            }
+        if len(candidates) > 1:
+            return None, {
+                "status": "ambiguous",
+                "matched_by": method,
+                "risk_level": "high",
+                "message": "Multiple possible vendor partners were found; pass partner_id explicitly.",
+                "candidates": candidates,
+            }
+
+    return None, {
+        "status": "not_found",
+        "risk_level": "high",
+        "message": "Could not resolve vendor by partner_id, VAT, supplier reference or name.",
+        "candidates": all_candidates,
+    }
+
+
+
+def _prepare_vendor_create_vals_from_ocr(
+    client: OdooClient, sender_id: int, payload: dict[str, Any]
+) -> tuple[dict[str, Any], list[str]]:
+    missing: list[str] = []
+    name = _first_text(
+        payload,
+        [
+            "vendor_name",
+            "partner_name",
+            "supplier_name",
+            "commercial_name",
+            "name",
+        ],
+    )
+    if not name:
+        missing.append("name")
+
+    vals: dict[str, Any] = {}
+    if name:
+        vals["name"] = name
+
+    field_candidates = {
+        "vat": _first_text(payload, ["vat", "vendor_vat", "supplier_vat", "tax_id"]),
+        "ref": _first_text(
+            payload, ["partner_ref", "supplier_ref", "vendor_ref", "ref_supplier"]
+        ),
+        "email": _first_text(payload, ["email", "vendor_email", "supplier_email"]),
+        "phone": _first_text(payload, ["phone", "vendor_phone", "supplier_phone"]),
+        "mobile": _first_text(payload, ["mobile", "vendor_mobile", "supplier_mobile"]),
+        "website": _first_text(payload, ["website", "vendor_website"]),
+        "street": _first_text(payload, ["street", "vendor_street", "supplier_street"]),
+        "street2": _first_text(payload, ["street2", "vendor_street2", "supplier_street2"]),
+        "zip": _first_text(payload, ["zip", "postal_code", "vendor_zip"]),
+        "city": _first_text(payload, ["city", "vendor_city", "supplier_city"]),
+    }
+    for field_name, value in field_candidates.items():
+        if value and _safe_field_exists(client, "res.partner", field_name, sender_id):
+            vals[field_name] = value
+
+    country_id = _safe_int(payload.get("country_id"))
+    if country_id and _safe_field_exists(client, "res.partner", "country_id", sender_id):
+        vals["country_id"] = country_id
+
+    if _safe_field_exists(client, "res.partner", "supplier_rank", sender_id):
+        vals["supplier_rank"] = 1
+    if _safe_field_exists(client, "res.partner", "company_type", sender_id):
+        vals["company_type"] = "company"
+    if _safe_field_exists(client, "res.partner", "is_company", sender_id):
+        vals["is_company"] = True
+
+    return vals, missing
+
+
+def _vendor_create_proposal_response(
+    vendor_resolution: dict[str, Any],
+    suggested_partner: dict[str, Any],
+    missing_required: list[str],
+    total_check: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "status": "vendor_create_proposed",
+        "capability": "accounting.create_vendor_bill_from_ocr_validated",
+        "message": "Vendor was not found. Review and confirm suggested partner creation before creating the vendor bill.",
+        "vendor_resolution": {
+            **vendor_resolution,
+            "suggested_partner": suggested_partner,
+            "missing_required_fields": missing_required,
+        },
+        "suggested_partner": suggested_partner,
+        "missing_required_fields": missing_required,
+        "required_confirmations": {
+            "confirm_partner_create": True,
+            "confirm": True,
+            "dry_run": False,
+            "vendor_create_policy": "create_with_confirm",
+        },
+        **({"total_check": total_check} if total_check else {}),
+    }
+
+def _date_domain(
+    field_name: str, date_from: Optional[str], date_to: Optional[str]
+) -> list:
     domain: list[list[Any]] = []
     if date_from:
         domain.append([field_name, ">=", date_from])
@@ -60,11 +288,11 @@ def _to_line_commands(lines: list[dict]) -> list[tuple[int, int, dict[str, Any]]
 def find_unreconciled_bank_lines(
     client: OdooClient,
     sender_id: int,
-    journal_id: int | None = None,
-    date_from: str | None = None,
-    date_to: str | None = None,
-    amount_min: float | None = None,
-    amount_max: float | None = None,
+    journal_id: Optional[int] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    amount_min: Optional[float] = None,
+    amount_max: Optional[float] = None,
     limit: int = 50,
 ) -> dict:
     if not client.model_exists("account.bank.statement.line", sender_id=sender_id):
@@ -83,28 +311,27 @@ def find_unreconciled_bank_lines(
     if amount_max is not None:
         domain.append(["amount", "<=", amount_max])
 
+    fields = [
+        "id",
+        "date",
+        "payment_ref",
+        "name",
+        "amount",
+        "partner_id",
+        "journal_id",
+        "is_reconciled",
+    ]
     rows = client.call_kw(
         "account.bank.statement.line",
         "search_read",
         args=[domain],
-        kwargs={
-            "fields": [
-                "id",
-                "date",
-                "payment_ref",
-                "name",
-                "amount",
-                "partner_id",
-                "journal_id",
-                "is_reconciled",
-            ],
-            "limit": limit,
-            "order": "date asc, id asc",
-        },
+        kwargs={"fields": fields, "limit": limit, "order": "date asc, id asc"},
         sender_id=sender_id,
     )
     return build_success_response(
-        "accounting.find_unreconciled_bank_lines", count=len(rows), lines=rows
+        "accounting.find_unreconciled_bank_lines",
+        count=len(rows),
+        lines=rows,
     )
 
 
@@ -133,7 +360,9 @@ def suggest_bank_reconciliation(
         "account.bank.statement.line",
         "read",
         args=[[statement_line_id]],
-        kwargs={"fields": ["id", "date", "amount", "partner_id", "payment_ref", "name"]},
+        kwargs={
+            "fields": ["id", "date", "amount", "partner_id", "payment_ref", "name"]
+        },
         sender_id=sender_id,
     )
     if not statement:
@@ -148,8 +377,12 @@ def suggest_bank_reconciliation(
     st_amount = abs(_safe_float(st.get("amount")))
     st_date = _parse_iso_date(st.get("date")) if st.get("date") else date.today()
     st_partner = st.get("partner_id", [None])[0] if st.get("partner_id") else None
+    st_ref = (st.get("payment_ref") or st.get("name") or "").strip().lower()
 
-    domain: list[list[Any]] = [["reconciled", "=", False], ["parent_state", "=", "posted"]]
+    domain: list[list[Any]] = [
+        ["reconciled", "=", False],
+        ["parent_state", "=", "posted"],
+    ]
     if st_partner:
         domain.append(["partner_id", "=", st_partner])
 
@@ -158,7 +391,16 @@ def suggest_bank_reconciliation(
         "search_read",
         args=[domain],
         kwargs={
-            "fields": ["id", "date", "name", "ref", "partner_id", "amount_residual", "balance", "move_id"],
+            "fields": [
+                "id",
+                "date",
+                "name",
+                "ref",
+                "partner_id",
+                "amount_residual",
+                "balance",
+                "move_id",
+            ],
             "limit": 200,
             "order": "date desc, id desc",
         },
@@ -174,20 +416,29 @@ def suggest_bank_reconciliation(
             continue
 
         diff = abs(residual - st_amount)
+        score = max(0.0, 60.0 - min(diff / max(tolerance_amount, 0.01), 60.0))
+        if diff <= tolerance_amount:
+            score += 25.0
+
         line_date = _parse_iso_date(row.get("date"), fallback=st_date)
         days_diff = abs((line_date - st_date).days)
-        partner_ref = row.get("partner_id", [None])[0] if row.get("partner_id") else None
+        if days_diff <= days_window:
+            score += max(0.0, 15.0 - (days_diff * 0.5))
 
-        score = 100.0
-        score -= min(60.0, diff / max(tolerance_amount, 0.01))
-        if days_diff > days_window:
-            score -= min(20.0, float(days_diff - days_window))
-        if st_partner and partner_ref != st_partner:
-            score -= 15.0
+        partner_ref = (
+            row.get("partner_id", [None])[0] if row.get("partner_id") else None
+        )
+        if st_partner and partner_ref == st_partner:
+            score += 15.0
+
+        row_ref = f"{row.get('ref') or ''} {row.get('name') or ''}".strip().lower()
+        if st_ref and row_ref:
+            if st_ref in row_ref or row_ref in st_ref:
+                score += 10.0
 
         scored.append(
             {
-                "score": round(max(0.0, score), 2),
+                "score": round(score, 2),
                 "id": row.get("id"),
                 "move_line_id": row.get("id"),
                 "date": row.get("date"),
@@ -223,23 +474,42 @@ def reconcile_bank_line(
             "statement_line_id": statement_line_id,
             "move_line_ids": move_line_ids,
         }
+    if not client.model_exists("account.bank.statement.line", sender_id=sender_id):
+        return build_unsupported_response(
+            "accounting.reconcile_bank_line",
+            "account.bank.statement.line model is not available in this Odoo instance.",
+            ["account.bank.statement.line"],
+        )
 
     attempts = [
-        ("process_reconciliation", [[statement_line_id], [{"move_line_id": line_id} for line_id in move_line_ids]], {}),
+        (
+            "process_reconciliation",
+            [
+                [statement_line_id],
+                [{"move_line_id": line_id} for line_id in move_line_ids],
+            ],
+            {},
+        ),
         ("action_reconcile", [[statement_line_id], move_line_ids], {}),
         ("reconcile", [[statement_line_id], move_line_ids], {}),
     ]
-    last_error: str | None = None
+    last_error: Optional[str] = None
     for method, args, kwargs in attempts:
         try:
-            client.call_kw("account.bank.statement.line", method, args=args, kwargs=kwargs, sender_id=sender_id)
+            client.call_kw(
+                "account.bank.statement.line",
+                method,
+                args=args,
+                kwargs=kwargs,
+                sender_id=sender_id,
+            )
             return build_success_response(
                 "accounting.reconcile_bank_line",
                 statement_line_id=statement_line_id,
                 move_line_ids=move_line_ids,
                 method=method,
             )
-        except Exception as exc:
+        except Exception as exc:  # pragma: no cover - fallback path
             last_error = str(exc)
 
     return {
@@ -255,17 +525,56 @@ def register_invoice_payment(
     client: OdooClient,
     sender_id: int,
     invoice_id: int,
-    amount: float | None = None,
-    payment_date: str | None = None,
-    journal_id: int | None = None,
-    memo: str | None = None,
+    amount: Optional[float] = None,
+    payment_date: Optional[str] = None,
+    journal_id: Optional[int] = None,
+    memo: Optional[str] = None,
 ) -> dict:
+    if not client.model_exists("account.move", sender_id=sender_id):
+        return build_unsupported_response(
+            "accounting.register_invoice_payment",
+            "account.move model is not available in this Odoo instance.",
+            ["account.move"],
+        )
     if not client.model_exists("account.payment.register", sender_id=sender_id):
         return build_unsupported_response(
             "accounting.register_invoice_payment",
             "account.payment.register model is not available in this Odoo instance.",
             ["account.payment.register"],
         )
+
+    rows = client.call_kw(
+        "account.move",
+        "read",
+        args=[[invoice_id]],
+        kwargs={
+            "fields": [
+                "id",
+                "state",
+                "payment_state",
+                "amount_residual",
+                "amount_total",
+            ]
+        },
+        sender_id=sender_id,
+    )
+    if not rows:
+        return {
+            "ok": False,
+            "status": "not_found",
+            "capability": "accounting.register_invoice_payment",
+            "message": f"Invoice {invoice_id} was not found.",
+        }
+
+    before = rows[0]
+    if before.get("state") != "posted":
+        return {
+            "ok": False,
+            "status": "invalid_state",
+            "capability": "accounting.register_invoice_payment",
+            "message": "Invoice must be posted before registering payments.",
+            "invoice_state": before.get("state"),
+        }
 
     context = {"active_model": "account.move", "active_ids": [invoice_id]}
     vals: dict[str, Any] = {}
@@ -293,10 +602,21 @@ def register_invoice_payment(
         sender_id=sender_id,
     )
 
+    after = client.call_kw(
+        "account.move",
+        "read",
+        args=[[invoice_id]],
+        kwargs={"fields": ["id", "payment_state", "amount_residual"]},
+        sender_id=sender_id,
+    )[0]
     return build_success_response(
         "accounting.register_invoice_payment",
         invoice_id=invoice_id,
         wizard_id=wizard_id,
+        payment_state_before=before.get("payment_state"),
+        payment_state_after=after.get("payment_state"),
+        residual_before=_safe_float(before.get("amount_residual")),
+        residual_after=_safe_float(after.get("amount_residual")),
     )
 
 
@@ -304,10 +624,17 @@ def get_ar_ap_aging(
     client: OdooClient,
     sender_id: int,
     report_type: str = "both",
-    as_of: str | None = None,
-    company_id: int | None = None,
+    as_of: Optional[str] = None,
+    company_id: Optional[int] = None,
     limit: int = 500,
 ) -> dict:
+    if not client.model_exists("account.move", sender_id=sender_id):
+        return build_unsupported_response(
+            "accounting.get_ar_ap_aging",
+            "account.move model is not available in this Odoo instance.",
+            ["account.move"],
+        )
+
     mapping = {
         "receivable": ["out_invoice", "out_refund"],
         "payable": ["in_invoice", "in_refund"],
@@ -328,14 +655,28 @@ def get_ar_ap_aging(
         "search_read",
         args=[domain],
         kwargs={
-            "fields": ["id", "name", "partner_id", "move_type", "invoice_date_due", "amount_residual", "currency_id"],
+            "fields": [
+                "id",
+                "name",
+                "partner_id",
+                "move_type",
+                "invoice_date_due",
+                "amount_residual",
+                "currency_id",
+            ],
             "limit": limit,
             "order": "invoice_date_due asc, id asc",
         },
         sender_id=sender_id,
     )
 
-    buckets = {"current": 0.0, "0_30": 0.0, "31_60": 0.0, "61_90": 0.0, "90_plus": 0.0}
+    buckets = {
+        "current": 0.0,
+        "0_30": 0.0,
+        "31_60": 0.0,
+        "61_90": 0.0,
+        "90_plus": 0.0,
+    }
     enriched: list[dict[str, Any]] = []
     for row in rows:
         due_raw = row.get("invoice_date_due")
@@ -347,7 +688,7 @@ def get_ar_ap_aging(
         if due_raw:
             due_date = _parse_iso_date(due_raw)
             overdue_days = max(0, (as_of_date - due_date).days)
-            if overdue_days <= 0:
+            if overdue_days == 0:
                 bucket = "current"
             elif overdue_days <= 30:
                 bucket = "0_30"
@@ -358,7 +699,13 @@ def get_ar_ap_aging(
             else:
                 bucket = "90_plus"
         buckets[bucket] += residual
-        enriched.append({**row, "overdue_days": overdue_days, "bucket": bucket})
+        enriched.append(
+            {
+                **row,
+                "overdue_days": overdue_days,
+                "bucket": bucket,
+            }
+        )
 
     return build_success_response(
         "accounting.get_ar_ap_aging",
@@ -374,8 +721,15 @@ def run_period_close_checks(
     sender_id: int,
     period_start: str,
     period_end: str,
-    company_id: int | None = None,
+    company_id: Optional[int] = None,
 ) -> dict:
+    if not client.model_exists("account.move", sender_id=sender_id):
+        return build_unsupported_response(
+            "accounting.run_period_close_checks",
+            "account.move model is not available in this Odoo instance.",
+            ["account.move"],
+        )
+
     move_domain = _date_domain("date", period_start, period_end)
     if company_id:
         move_domain.append(["company_id", "=", company_id])
@@ -389,18 +743,24 @@ def run_period_close_checks(
     unpaid_overdue = client.call_kw(
         "account.move",
         "search_count",
-        args=[[
-            *move_domain,
-            ["state", "=", "posted"],
-            ["move_type", "=", "out_invoice"],
-            ["payment_state", "in", ["not_paid", "partial"]],
-            ["invoice_date_due", "<=", period_end],
-        ]],
+        args=[
+            [
+                *move_domain,
+                ["state", "=", "posted"],
+                ["move_type", "=", "out_invoice"],
+                ["payment_state", "in", ["not_paid", "partial"]],
+                ["invoice_date_due", "<=", period_end],
+            ]
+        ],
         sender_id=sender_id,
     )
     unreconciled_bank_lines = 0
     if client.model_exists("account.bank.statement.line", sender_id=sender_id):
-        bank_domain = [["is_reconciled", "=", False], ["date", ">=", period_start], ["date", "<=", period_end]]
+        bank_domain = [
+            ["is_reconciled", "=", False],
+            ["date", ">=", period_start],
+            ["date", "<=", period_end],
+        ]
         if company_id:
             bank_domain.append(["company_id", "=", company_id])
         unreconciled_bank_lines = client.call_kw(
@@ -420,6 +780,7 @@ def run_period_close_checks(
         critical.append("There are draft journal entries inside the period.")
     if unreconciled_bank_lines > 0:
         critical.append("There are unreconciled bank statement lines in the period.")
+
     warnings = []
     if unpaid_overdue > 0:
         warnings.append("There are overdue customer invoices pending payment.")
@@ -442,9 +803,15 @@ def create_journal_entry(
     journal_id: int,
     entry_date: str,
     lines: list[dict[str, Any]],
-    ref: str | None = None,
-    company_id: int | None = None,
+    ref: Optional[str] = None,
+    company_id: Optional[int] = None,
 ) -> dict:
+    if not client.model_exists("account.move", sender_id=sender_id):
+        return build_unsupported_response(
+            "accounting.create_journal_entry",
+            "account.move model is not available in this Odoo instance.",
+            ["account.move"],
+        )
     if not lines:
         raise ValueError("Journal entry requires at least one line.")
 
@@ -506,12 +873,16 @@ def post_journal_entry(
 
     if row[0].get("state") == "posted":
         return build_success_response(
-            "accounting.post_journal_entry", move_id=move_id, already_posted=True
+            "accounting.post_journal_entry",
+            move_id=move_id,
+            already_posted=True,
         )
 
     client.call_kw("account.move", "action_post", args=[[move_id]], sender_id=sender_id)
     return build_success_response(
-        "accounting.post_journal_entry", move_id=move_id, posted=True
+        "accounting.post_journal_entry",
+        move_id=move_id,
+        posted=True,
     )
 
 
@@ -520,9 +891,16 @@ def get_tax_summary(
     sender_id: int,
     date_from: str,
     date_to: str,
-    company_id: int | None = None,
-    tax_group_id: int | None = None,
+    company_id: Optional[int] = None,
+    tax_group_id: Optional[int] = None,
 ) -> dict:
+    if not client.model_exists("account.move.line", sender_id=sender_id):
+        return build_unsupported_response(
+            "accounting.get_tax_summary",
+            "account.move.line model is not available in this Odoo instance.",
+            ["account.move.line"],
+        )
+
     domain: list[list[Any]] = [
         ["tax_line_id", "!=", False],
         ["parent_state", "=", "posted"],
@@ -545,6 +923,8 @@ def get_tax_summary(
         if not tax_ref:
             continue
         tax_id = int(tax_ref[0])
+        base_amount = _safe_float(row.get("tax_base_amount"))
+        tax_amount = _safe_float(row.get("balance"))
         current = tax_totals.setdefault(
             tax_id,
             {
@@ -554,8 +934,8 @@ def get_tax_summary(
                 "tax_amount": 0.0,
             },
         )
-        current["base_amount"] += _safe_float(row.get("tax_base_amount"))
-        current["tax_amount"] += _safe_float(row.get("balance"))
+        current["base_amount"] += base_amount
+        current["tax_amount"] += tax_amount
 
     if tax_group_id and client.model_exists("account.tax", sender_id=sender_id):
         tax_ids = list(tax_totals.keys())
@@ -571,7 +951,9 @@ def get_tax_summary(
             for t in tax_rows
             if t.get("tax_group_id") and int(t["tax_group_id"][0]) == tax_group_id
         }
-        tax_totals = {tax_id: info for tax_id, info in tax_totals.items() if tax_id in allowed}
+        tax_totals = {
+            tax_id: info for tax_id, info in tax_totals.items() if tax_id in allowed
+        }
 
     taxes = [
         {
@@ -598,12 +980,19 @@ def validate_vendor_bill_duplicate(
     client: OdooClient,
     sender_id: int,
     partner_id: int,
-    vendor_bill_number: str | None,
-    invoice_date: str | None,
-    amount_total: float | None,
-    currency_id: int | None = None,
+    vendor_bill_number: Optional[str],
+    invoice_date: Optional[str],
+    amount_total: Optional[float],
+    currency_id: Optional[int] = None,
     tolerance: float = 0.01,
 ) -> dict:
+    if not client.model_exists("account.move", sender_id=sender_id):
+        return build_unsupported_response(
+            "accounting.validate_vendor_bill_duplicate",
+            "account.move model is not available in this Odoo instance.",
+            ["account.move"],
+        )
+
     domain: list[list[Any]] = [
         ["partner_id", "=", partner_id],
         ["move_type", "in", ["in_invoice", "in_refund"]],
@@ -611,13 +1000,21 @@ def validate_vendor_bill_duplicate(
     ]
     if currency_id:
         domain.append(["currency_id", "=", currency_id])
-
     candidates = client.call_kw(
         "account.move",
         "search_read",
         args=[domain],
         kwargs={
-            "fields": ["id", "name", "ref", "invoice_date", "amount_total", "currency_id", "state", "payment_state"],
+            "fields": [
+                "id",
+                "name",
+                "ref",
+                "invoice_date",
+                "amount_total",
+                "currency_id",
+                "state",
+                "payment_state",
+            ],
             "limit": 100,
             "order": "invoice_date desc, id desc",
         },
@@ -667,10 +1064,17 @@ def suggest_expense_account_and_taxes(
     sender_id: int,
     description: str,
     amount: float,
-    partner_id: int | None = None,
-    product_id: int | None = None,
-    company_id: int | None = None,
+    partner_id: Optional[int] = None,
+    product_id: Optional[int] = None,
+    company_id: Optional[int] = None,
 ) -> dict:
+    if not client.model_exists("account.move.line", sender_id=sender_id):
+        return build_unsupported_response(
+            "accounting.suggest_expense_account_and_taxes",
+            "account.move.line model is not available in this Odoo instance.",
+            ["account.move.line"],
+        )
+
     domain: list[list[Any]] = [
         ["display_type", "=", False],
         ["move_id.state", "=", "posted"],
@@ -687,7 +1091,11 @@ def suggest_expense_account_and_taxes(
         "account.move.line",
         "search_read",
         args=[domain],
-        kwargs={"fields": ["account_id", "tax_ids", "name", "price_subtotal"], "limit": 100, "order": "id desc"},
+        kwargs={
+            "fields": ["account_id", "tax_ids", "name", "price_subtotal"],
+            "limit": 100,
+            "order": "id desc",
+        },
         sender_id=sender_id,
     )
 
@@ -701,11 +1109,40 @@ def suggest_expense_account_and_taxes(
             tax_counter[int(tax_id)] += 1
 
     suggested_account_id = (
-        max(account_counter.keys(), key=lambda account_id: account_counter[account_id])
+        max(
+            account_counter.keys(),
+            key=lambda account_id: account_counter[account_id],
+        )
         if account_counter
         else None
     )
-    suggested_tax_ids = [tax for tax, _ in sorted(tax_counter.items(), key=lambda item: item[1], reverse=True)[:3]]
+    suggested_tax_ids = [
+        tax
+        for tax, _ in sorted(
+            tax_counter.items(), key=lambda item: item[1], reverse=True
+        )[:3]
+    ]
+
+    if (
+        not suggested_account_id
+        and product_id
+        and client.model_exists("product.product", sender_id=sender_id)
+    ):
+        product_rows = client.call_kw(
+            "product.product",
+            "read",
+            args=[[product_id]],
+            kwargs={"fields": ["property_account_expense_id", "supplier_taxes_id"]},
+            sender_id=sender_id,
+        )
+        if product_rows:
+            product = product_rows[0]
+            if product.get("property_account_expense_id"):
+                suggested_account_id = int(product["property_account_expense_id"][0])
+            if not suggested_tax_ids:
+                suggested_tax_ids = [
+                    int(tax_id) for tax_id in (product.get("supplier_taxes_id") or [])
+                ]
 
     return build_success_response(
         "accounting.suggest_expense_account_and_taxes",
@@ -713,7 +1150,11 @@ def suggest_expense_account_and_taxes(
         amount=amount,
         suggested_account_id=suggested_account_id,
         suggested_tax_ids=suggested_tax_ids,
-        confidence="high" if account_counter else "low",
+        confidence="high"
+        if account_counter
+        else "medium"
+        if suggested_account_id
+        else "low",
     )
 
 
@@ -725,10 +1166,17 @@ def _normalize_ocr_lines(payload: dict[str, Any]) -> list[dict[str, Any]]:
             {
                 "name": raw.get("name") or raw.get("description") or "Line",
                 "quantity": _safe_float(raw.get("quantity") or 1.0),
-                "price_unit": _safe_float(raw.get("price_unit") or raw.get("unit_price") or 0.0),
+                "price_unit": _safe_float(
+                    raw.get("price_unit") or raw.get("unit_price") or 0.0
+                ),
                 "product_id": raw.get("product_id"),
                 "account_id": raw.get("account_id"),
                 "tax_ids": raw.get("tax_ids") or [],
+                "line_total": raw.get("line_total")
+                or raw.get("price_total")
+                or raw.get("amount_total")
+                or raw.get("subtotal")
+                or raw.get("price_subtotal"),
             }
         )
     return normalized
@@ -738,25 +1186,90 @@ def create_vendor_bill_from_ocr_validated(
     client: OdooClient,
     sender_id: int,
     ocr_payload: dict[str, Any],
-    attachment_id: int | None = None,
+    attachment_id: Optional[int] = None,
     confirm: bool = False,
     dry_run: bool = False,
-    company_id: int | None = None,
-    allowed_company_ids: list[int] | None = None,
+    company_id: Optional[int] = None,
+    allowed_company_ids: Optional[list[int]] = None,
+    total_tolerance: float = 0.01,
+    vendor_create_policy: str = "propose_create",
+    confirm_partner_create: bool = False,
 ) -> dict:
-    partner_id = ocr_payload.get("partner_id")
-    if not partner_id:
-        raise ValueError("OCR payload must include partner_id to create vendor bill.")
+    if not client.model_exists("account.move", sender_id=sender_id):
+        return build_unsupported_response(
+            "accounting.create_vendor_bill_from_ocr_validated",
+            "account.move model is not available in this Odoo instance.",
+            ["account.move"],
+        )
 
     lines = _normalize_ocr_lines(ocr_payload)
     if not lines:
         raise ValueError("OCR payload must include at least one invoice line.")
 
+    total_check = _validate_ocr_total(ocr_payload, lines, total_tolerance)
+    if not total_check.get("within_tolerance", True):
+        return {
+            "ok": False,
+            "status": "total_mismatch",
+            "capability": "accounting.create_vendor_bill_from_ocr_validated",
+            "message": "OCR total does not match the calculated invoice lines total.",
+            "total_check": total_check,
+        }
+
+    partner_created = False
+    partner_id, vendor_resolution = _resolve_vendor_from_ocr(
+        client, sender_id, ocr_payload
+    )
+    if not partner_id:
+        if vendor_resolution.get("status") != "not_found" or vendor_create_policy == "search_only":
+            return {
+                "ok": False,
+                "status": "vendor_resolution_failed",
+                "capability": "accounting.create_vendor_bill_from_ocr_validated",
+                "message": vendor_resolution.get("message")
+                or "Could not resolve vendor from OCR payload.",
+                "vendor_resolution": vendor_resolution,
+                "total_check": total_check,
+            }
+
+        suggested_partner, missing_required = _prepare_vendor_create_vals_from_ocr(
+            client, sender_id, ocr_payload
+        )
+        if missing_required:
+            return _vendor_create_proposal_response(
+                vendor_resolution, suggested_partner, missing_required, total_check
+            )
+        if (
+            vendor_create_policy != "create_with_confirm"
+            or not confirm_partner_create
+            or not confirm
+            or dry_run
+        ):
+            return _vendor_create_proposal_response(
+                vendor_resolution, suggested_partner, missing_required, total_check
+            )
+
+        partner_id = client.call_kw(
+            "res.partner",
+            "create",
+            args=[suggested_partner],
+            sender_id=sender_id,
+        )
+        partner_created = True
+        vendor_resolution = {
+            **vendor_resolution,
+            "status": "created",
+            "partner_id": int(partner_id),
+            "created_partner_vals": suggested_partner,
+            "risk_level": "low",
+        }
+
     duplicate_check = validate_vendor_bill_duplicate(
         client=client,
         sender_id=sender_id,
         partner_id=int(partner_id),
-        vendor_bill_number=ocr_payload.get("ref") or ocr_payload.get("vendor_bill_number"),
+        vendor_bill_number=ocr_payload.get("ref")
+        or ocr_payload.get("vendor_bill_number"),
         invoice_date=ocr_payload.get("invoice_date"),
         amount_total=ocr_payload.get("amount_total"),
         currency_id=ocr_payload.get("currency_id"),
@@ -769,10 +1282,29 @@ def create_vendor_bill_from_ocr_validated(
             "capability": "accounting.create_vendor_bill_from_ocr_validated",
             "message": "High duplicate risk detected. Confirm the operation to proceed.",
             "duplicate_candidates": duplicate_check.get("candidates", []),
+            "vendor_resolution": vendor_resolution,
+            "total_check": total_check,
         }
 
     line_commands: list[tuple[int, int, dict[str, Any]]] = []
     for line in lines:
+        account_id = line.get("account_id")
+        tax_ids = list(line.get("tax_ids") or [])
+        if not account_id or not tax_ids:
+            suggestion = suggest_expense_account_and_taxes(
+                client=client,
+                sender_id=sender_id,
+                description=str(line.get("name") or "Line"),
+                amount=_safe_float(line.get("price_unit"))
+                * _safe_float(line.get("quantity")),
+                partner_id=int(partner_id),
+                product_id=line.get("product_id"),
+                company_id=company_id,
+            )
+            account_id = account_id or suggestion.get("suggested_account_id")
+            if not tax_ids:
+                tax_ids = list(suggestion.get("suggested_tax_ids") or [])
+
         vals: dict[str, Any] = {
             "name": line.get("name") or "Line",
             "quantity": _safe_float(line.get("quantity")) or 1.0,
@@ -780,10 +1312,10 @@ def create_vendor_bill_from_ocr_validated(
         }
         if line.get("product_id"):
             vals["product_id"] = int(line["product_id"])
-        if line.get("account_id"):
-            vals["account_id"] = int(line["account_id"])
-        if line.get("tax_ids"):
-            vals["tax_ids"] = [(6, 0, [int(t) for t in line["tax_ids"]])]
+        if account_id:
+            vals["account_id"] = int(account_id)
+        if tax_ids:
+            vals["tax_ids"] = [(6, 0, [int(t) for t in tax_ids])]
         line_commands.append((0, 0, vals))
 
     move_vals: dict[str, Any] = {
@@ -793,8 +1325,20 @@ def create_vendor_bill_from_ocr_validated(
         "invoice_line_ids": line_commands,
         "ref": ocr_payload.get("ref") or ocr_payload.get("vendor_bill_number") or "",
     }
-    if company_id:
-        move_vals["company_id"] = company_id
+    optional_move_fields = {
+        "invoice_payment_term_id": ocr_payload.get("payment_term_id")
+        or ocr_payload.get("invoice_payment_term_id"),
+        "currency_id": ocr_payload.get("currency_id"),
+        "fiscal_position_id": ocr_payload.get("fiscal_position_id"),
+        "invoice_date_due": ocr_payload.get("invoice_date_due")
+        or ocr_payload.get("date_due"),
+        "company_id": company_id or ocr_payload.get("company_id"),
+    }
+    for field_name, value in optional_move_fields.items():
+        if value not in (None, False, "") and _safe_field_exists(
+            client, "account.move", field_name, sender_id
+        ):
+            move_vals[field_name] = value
 
     preview = {
         "partner_id": move_vals["partner_id"],
@@ -802,6 +1346,9 @@ def create_vendor_bill_from_ocr_validated(
         "ref": move_vals.get("ref"),
         "line_count": len(line_commands),
         "duplicate_risk": risk_level,
+        "vendor_resolution": vendor_resolution,
+        "total_check": total_check,
+        "partner_created": partner_created,
     }
     if dry_run:
         return build_success_response(
@@ -844,5 +1391,67 @@ def create_vendor_bill_from_ocr_validated(
         move_id=move_id,
         duplicate_risk=risk_level,
         duplicate_candidates=duplicate_check.get("candidates", []),
+        vendor_resolution=vendor_resolution,
+        total_check=total_check,
+        partner_created=partner_created,
         attachment_linked=bool(attachment_id),
     )
+
+
+def get_financial_snapshot(
+    client: OdooClient,
+    sender_id: int,
+    company_id: Optional[int] = None,
+    limit: int = 100,
+) -> dict:
+    """Financial situation snapshot: AR/AP aging + pending invoices + month sales/purchases.
+
+    Synthesis tool: the LLM only recognizes the intent ("situación financiera",
+    "como estamos de dinero"), this function does all the queries.
+    """
+    if not client.model_exists("account.move", sender_id=sender_id):
+        return build_unsupported_response(
+            "accounting.get_financial_snapshot",
+            "account.move model is not available in this Odoo instance.",
+            ["account.move"],
+        )
+
+    aging = get_ar_ap_aging(client, sender_id, report_type="both", company_id=company_id, limit=limit)
+
+    month_start = date.today().replace(day=1)
+    iso = month_start.isoformat()
+
+    def _moves(move_types: list[str], state: str = "posted") -> list[dict]:
+        domain: list[list[Any]] = [
+            ["move_type", "in", move_types],
+            ["state", "=", state],
+        ]
+        if company_id:
+            domain.append(["company_id", "=", company_id])
+        rows = client.call_kw(
+            "account.move",
+            "search_read",
+            args=[domain],
+            kwargs={"fields": ["id", "name", "partner_id", "amount_total", "invoice_date", "payment_state"], "limit": limit},
+            sender_id=sender_id,
+        )
+        return rows
+
+    sales = _moves(["out_invoice"])
+    purchases = _moves(["in_invoice"])
+    month_sales = [r for r in sales if (r.get("invoice_date") or "")[:7] == month_start.strftime("%Y-%m")]
+    month_purchases = [r for r in purchases if (r.get("invoice_date") or "")[:7] == month_start.strftime("%Y-%m")]
+
+    def _sum(rows: list[dict]) -> float:
+        return round(sum(_safe_float(r.get("amount_total")) for r in rows), 2)
+
+    return {
+        "summary": {
+            "month_sales_total": _sum(month_sales),
+            "month_purchases_total": _sum(month_purchases),
+            "sales_invoices_count": len(sales),
+            "purchase_invoices_count": len(purchases),
+            "month": month_start.strftime("%Y-%m"),
+        },
+        "aging": aging,
+    }

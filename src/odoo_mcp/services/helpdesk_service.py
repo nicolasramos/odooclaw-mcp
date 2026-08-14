@@ -1,3 +1,4 @@
+from typing import Optional
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
@@ -9,18 +10,18 @@ from odoo_mcp.services.capability_service import (
 _logger = get_logger("helpdesk_service")
 
 
-def _helpdesk_fields(client: OdooClient, user_id: int) -> dict | None:
-    return client.try_get_model_fields("helpdesk.ticket")
+def _helpdesk_fields(client: OdooClient, user_id: int) -> Optional[dict]:
+    return client.try_get_model_fields("helpdesk.ticket", sender_id=user_id)
 
 
 def _ticket_values(
     fields: dict,
     name: str,
-    description: str | None = None,
-    partner_id: int | None = None,
-    email: str | None = None,
-    team_id: int | None = None,
-    priority: str | None = None,
+    description: Optional[str] = None,
+    partner_id: Optional[int] = None,
+    email: Optional[str] = None,
+    team_id: Optional[int] = None,
+    priority: Optional[str] = None,
 ) -> dict:
     values = {"name": name}
     if description and "description" in fields:
@@ -45,11 +46,11 @@ def create_helpdesk_ticket(
     client: OdooClient,
     user_id: int,
     name: str,
-    description: str | None = None,
-    partner_id: int | None = None,
-    email: str | None = None,
-    team_id: int | None = None,
-    priority: str | None = None,
+    description: Optional[str] = None,
+    partner_id: Optional[int] = None,
+    email: Optional[str] = None,
+    team_id: Optional[int] = None,
+    priority: Optional[str] = None,
 ) -> dict:
     fields = _helpdesk_fields(client, user_id)
     if not fields:
@@ -70,7 +71,7 @@ def create_helpdesk_ticket(
     )
     _logger.info(f"Creating helpdesk ticket: {name}")
     ticket_id = client.call_kw(
-        "helpdesk.ticket", "create", args=[values]
+        "helpdesk.ticket", "create", args=[values], sender_id=user_id
     )
     return build_success_response(
         "helpdesk.create_ticket",
@@ -85,9 +86,9 @@ def create_helpdesk_ticket_from_partner(
     user_id: int,
     partner_id: int,
     name: str,
-    description: str | None = None,
-    team_id: int | None = None,
-    priority: str | None = None,
+    description: Optional[str] = None,
+    team_id: Optional[int] = None,
+    priority: Optional[str] = None,
 ) -> dict:
     partner = client.call_kw(
         "res.partner",
@@ -130,11 +131,11 @@ def draft_ticket_email(
     ticket_id: int,
     subject: str,
     body: str,
-    email_to: str | None = None,
+    email_to: Optional[str] = None,
 ) -> dict:
     helpdesk_fields = _helpdesk_fields(client, user_id)
     compose_fields = client.try_get_model_fields(
-        "mail.compose.message"
+        "mail.compose.message", sender_id=user_id
     )
     if not helpdesk_fields or not compose_fields:
         return build_unsupported_response(
@@ -182,6 +183,7 @@ def draft_ticket_email(
                 partner_email = partner[0].get("email")
 
     draft_payload = {
+        "ticket_id": ticket_id,
         "model": "helpdesk.ticket",
         "res_id": ticket_id,
         "subject": subject,

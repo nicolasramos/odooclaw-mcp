@@ -1,11 +1,10 @@
-from collections.abc import Iterable
-from typing import Any
+from typing import Any, Dict, Iterable, Optional
 
 from odoo_mcp.core.client import OdooClient
 
 
 def build_unsupported_response(
-    capability: str, message: str, missing: Iterable[str] | None = None
+    capability: str, message: str, missing: Optional[Iterable[str]] = None
 ) -> dict:
     return {
         "ok": False,
@@ -27,8 +26,8 @@ def build_success_response(capability: str, **payload: Any) -> dict:
 
 
 def get_capabilities(client: OdooClient, user_id: int) -> dict:
-    def probe(model: str) -> dict[str, Any]:
-        fields = client.try_get_model_fields(model)
+    def probe(model: str) -> Dict[str, Any]:
+        fields = client.try_get_model_fields(model, sender_id=user_id)
         return {
             "available": fields is not None,
             "fields": sorted(fields.keys()) if fields else [],
@@ -39,6 +38,11 @@ def get_capabilities(client: OdooClient, user_id: int) -> dict:
     contract_line = probe("contract.line")
     contract_contract = probe("contract.contract")
     mail_compose = probe("mail.compose.message")
+    account_move = probe("account.move")
+    account_move_line = probe("account.move.line")
+    account_payment_register = probe("account.payment.register")
+    account_bank_line = probe("account.bank.statement.line")
+    account_tax = probe("account.tax")
 
     return {
         "helpdesk": {
@@ -63,5 +67,14 @@ def get_capabilities(client: OdooClient, user_id: int) -> dict:
             "available": helpdesk_ticket["available"] and mail_compose["available"],
             "models": ["helpdesk.ticket", "mail.compose.message"],
             "fields": mail_compose["fields"],
+        },
+        "accounting": {
+            "available": account_move["available"] and account_move_line["available"],
+            "models": ["account.move", "account.move.line"],
+            "payment_register_available": account_payment_register["available"],
+            "bank_reconciliation_available": account_bank_line["available"],
+            "tax_summary_available": account_tax["available"],
+            "move_fields": account_move["fields"],
+            "move_line_fields": account_move_line["fields"],
         },
     }
