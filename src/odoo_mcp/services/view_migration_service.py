@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import difflib
+import json
 import re
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
@@ -31,7 +32,7 @@ def _resolve_xmlid(
     sender_id: int,
     xmlid: str,
     expected_model: str | None = None,
-) -> dict[str, Any] | None:
+) -> Any:
     parsed = _parse_xmlid(xmlid)
     if not parsed:
         return None
@@ -501,9 +502,10 @@ def scan_view_migration_issues(
     client: OdooClient,
     sender_id: int,
     xmlid: str,
-    target_version: str,
+    target_version: str | None,
     rule_sets: list[str] | None = None,
 ) -> dict[str, Any]:
+    target_version = target_version or "18.0"
     view_response = get_view_by_xmlid(client, sender_id, xmlid, include_inherited_chain=False)
     if not view_response.get("ok"):
         return view_response
@@ -533,9 +535,10 @@ def scan_report_migration_issues(
     client: OdooClient,
     sender_id: int,
     xmlid: str,
-    target_version: str,
+    target_version: str | None,
     rule_sets: list[str] | None = None,
 ) -> dict[str, Any]:
+    target_version = target_version or "18.0"
     report_response = get_report_template(client, sender_id, xmlid)
     if not report_response.get("ok"):
         return report_response
@@ -566,9 +569,10 @@ def propose_view_patch(
     client: OdooClient,
     sender_id: int,
     xmlid: str,
-    intent: str,
-    constraints: dict[str, Any] | None = None,
+    intent: str | None,
+    constraints: Any = None,
 ) -> dict[str, Any]:
+    intent = intent or "migrate"
     scan = scan_view_migration_issues(client, sender_id, xmlid, target_version="18.0")
     if not scan.get("ok"):
         return scan
@@ -602,9 +606,10 @@ def propose_report_patch(
     client: OdooClient,
     sender_id: int,
     xmlid: str,
-    intent: str,
-    constraints: dict[str, Any] | None = None,
+    intent: str | None,
+    constraints: Any = None,
 ) -> dict[str, Any]:
+    intent = intent or "migrate"
     scan = scan_report_migration_issues(client, sender_id, xmlid, target_version="18.0")
     if not scan.get("ok"):
         return scan
@@ -638,10 +643,12 @@ def validate_view_patch(
     client: OdooClient,
     sender_id: int,
     base_view_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     strict: bool = True,
-    target_version: str = "18.0",
+    target_version: str | None = "18.0",
 ) -> dict[str, Any]:
+    target_version = target_version or "18.0"
+    patch = json.loads(patch) if isinstance(patch, str) else patch
     view_response = get_view_by_xmlid(
         client, sender_id, base_view_xmlid, include_inherited_chain=False
     )
@@ -715,10 +722,12 @@ def validate_report_patch(
     client: OdooClient,
     sender_id: int,
     report_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     strict: bool = True,
-    target_version: str = "18.0",
+    target_version: str | None = "18.0",
 ) -> dict[str, Any]:
+    target_version = target_version or "18.0"
+    patch = json.loads(patch) if isinstance(patch, str) else patch
     report_response = get_report_template(client, sender_id, report_xmlid)
     if not report_response.get("ok"):
         return report_response
@@ -790,9 +799,10 @@ def preview_view_patch(
     client: OdooClient,
     sender_id: int,
     base_view_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     diff_format: str = "unified",
 ) -> dict[str, Any]:
+    patch = json.loads(patch) if isinstance(patch, str) else patch
     view_response = get_view_by_xmlid(
         client, sender_id, base_view_xmlid, include_inherited_chain=False
     )
@@ -891,7 +901,7 @@ def apply_view_patch_safe(
     client: OdooClient,
     sender_id: int,
     base_view_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     *,
     strict: bool = True,
     confirm: bool = False,
@@ -899,6 +909,7 @@ def apply_view_patch_safe(
     inherited_view_name: str | None = None,
     priority: int = 90,
 ) -> dict[str, Any]:
+    patch = json.loads(patch) if isinstance(patch, str) else patch
     view_response = get_view_by_xmlid(
         client, sender_id, base_view_xmlid, include_inherited_chain=False
     )
@@ -1023,7 +1034,7 @@ def apply_report_patch_safe(
     client: OdooClient,
     sender_id: int,
     report_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     *,
     strict: bool = True,
     confirm: bool = False,
@@ -1031,6 +1042,7 @@ def apply_report_patch_safe(
     inherited_view_name: str | None = None,
     priority: int = 90,
 ) -> dict[str, Any]:
+    patch = json.loads(patch) if isinstance(patch, str) else patch
     report_response = get_report_template(client, sender_id, report_xmlid)
     if not report_response.get("ok"):
         return report_response
@@ -1226,9 +1238,10 @@ def preview_report_patch(
     client: OdooClient,
     sender_id: int,
     report_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     diff_format: str = "unified",
 ) -> dict[str, Any]:
+    patch = json.loads(patch) if isinstance(patch, str) else patch
     report_response = get_report_template(client, sender_id, report_xmlid)
     if not report_response.get("ok"):
         return report_response
@@ -1318,12 +1331,14 @@ def assist_view_migration(
     client: OdooClient,
     sender_id: int,
     xmlid: str,
-    target_version: str = "18.0",
-    intent: str = "migrate",
-    constraints: dict[str, Any] | None = None,
+    target_version: str | None = "18.0",
+    intent: str | None = "migrate",
+    constraints: Any = None,
     strict: bool = True,
     include_compile_test: bool = True,
 ) -> dict[str, Any]:
+    target_version = target_version or "18.0"
+    intent = intent or "migrate"
     scan = scan_view_migration_issues(
         client,
         sender_id,
@@ -1398,11 +1413,13 @@ def assist_report_migration(
     client: OdooClient,
     sender_id: int,
     xmlid: str,
-    target_version: str = "18.0",
-    intent: str = "migrate",
-    constraints: dict[str, Any] | None = None,
+    target_version: str | None = "18.0",
+    intent: str | None = "migrate",
+    constraints: Any = None,
     strict: bool = True,
 ) -> dict[str, Any]:
+    target_version = target_version or "18.0"
+    intent = intent or "migrate"
     scan = scan_report_migration_issues(
         client,
         sender_id,
@@ -1505,7 +1522,7 @@ def visualize_view_patch(
     client: OdooClient,
     sender_id: int,
     base_view_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     diff_format: str = "unified",
 ) -> dict[str, Any]:
     preview = preview_view_patch(
@@ -1541,7 +1558,7 @@ def visualize_report_patch(
     client: OdooClient,
     sender_id: int,
     report_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     diff_format: str = "unified",
 ) -> dict[str, Any]:
     preview = preview_report_patch(
@@ -1577,13 +1594,14 @@ def batch_assist_view_migration(
     client: OdooClient,
     sender_id: int,
     xmlids: list[str],
-    target_version: str = "18.0",
-    intent: str = "migrate",
-    constraints: dict[str, Any] | None = None,
+    target_version: str | None = "18.0",
+    intent: str | None = "migrate",
+    constraints: Any = None,
     strict: bool = True,
     include_compile_test: bool = False,
     continue_on_error: bool = True,
 ) -> dict[str, Any]:
+    intent = intent or "migrate"
     results: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
     aggregate = {"high": 0, "medium": 0, "low": 0}
@@ -1643,12 +1661,13 @@ def batch_assist_report_migration(
     client: OdooClient,
     sender_id: int,
     xmlids: list[str],
-    target_version: str = "18.0",
-    intent: str = "migrate",
-    constraints: dict[str, Any] | None = None,
+    target_version: str | None = "18.0",
+    intent: str | None = "migrate",
+    constraints: Any = None,
     strict: bool = True,
     continue_on_error: bool = True,
 ) -> dict[str, Any]:
+    intent = intent or "migrate"
     results: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
     aggregate = {"high": 0, "medium": 0, "low": 0}

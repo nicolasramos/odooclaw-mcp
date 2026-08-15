@@ -7,7 +7,7 @@ _metrics_logger = get_logger("metrics")
 
 
 @contextmanager
-def measure_time(operation_name: str, labels: dict = None):
+def measure_time(operation_name: str, labels: dict | None = None):
     """Context manager to measure and log the execution time of an operation."""
     start = time.time()
     try:

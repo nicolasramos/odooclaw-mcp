@@ -59,3 +59,16 @@ class OdooSession:
     def is_authenticated(self) -> bool:
         """Check if we have an active session UID."""
         return self.uid is not None
+
+    def get_uid(self) -> int:
+        """Return the current UID.
+
+        Raises AssertionError if not authenticated — this should never
+        happen in normal operation because _ensure_authenticated() is
+        called first in every tool function.
+        """
+        uid = self.uid
+        assert (
+            uid is not None
+        ), "OdooSession not authenticated — get_uid() called before authenticate()"
+        return uid

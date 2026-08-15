@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from odoo_mcp.core.client import OdooClient
 
@@ -13,9 +14,9 @@ def create_lead(
     expected_revenue: float | None = None,
     probability: float | None = None,
     description: str | None = None,
-) -> int:
+) -> Any:
     """Create a new CRM lead/opportunity."""
-    vals = {
+    vals: dict[str, Any] = {
         "name": name,
         "type": "opportunity",  # Typically we want to create opportunities straight away
     }

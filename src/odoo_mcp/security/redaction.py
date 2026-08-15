@@ -6,7 +6,7 @@ def redact_sensitive_values(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(data, dict):
         return data
 
-    redacted = {}
+    redacted: dict[str, Any] = {}
     sensitives = {"password", "secret", "token", "auth_code", "api_key"}
 
     for k, v in data.items():

@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from odoo_mcp.core.client import OdooClient
 
@@ -14,7 +15,7 @@ def create_calendar_event(
     partner_ids: list[int] | None = None,
     allday: bool = False,
     description: str | None = None,
-) -> int:
+) -> Any:
     """Create a new calendar event (appointment) in Odoo."""
     vals = {
         "name": name,

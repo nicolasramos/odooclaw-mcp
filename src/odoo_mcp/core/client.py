@@ -56,6 +56,33 @@ class OdooClient:
 
         return self._do_post(endpoint, payload)
 
+    def try_call_kw(
+        self,
+        model: str,
+        method: str,
+        args: list[Any] | None = None,
+        kwargs: dict[str, Any] | None = None,
+        sender_id: int | None = None,
+        default: Any = None,
+    ) -> Any:
+        try:
+            return self.call_kw(model, method, args=args, kwargs=kwargs, sender_id=sender_id)
+        except OdooRPCError:
+            return default
+
+    def get_model_fields(self, model: str, sender_id: int | None = None) -> Any:
+        return self.call_kw(model, "fields_get", sender_id=sender_id)
+
+    def try_get_model_fields(self, model: str, sender_id: int | None = None) -> Any:
+        return self.try_call_kw(model, "fields_get", sender_id=sender_id, default=None)
+
+    def model_exists(self, model: str, sender_id: int | None = None) -> bool:
+        return self.try_get_model_fields(model, sender_id=sender_id) is not None
+
+    def field_exists(self, model: str, field_name: str, sender_id: int | None = None) -> bool:
+        fields = self.try_get_model_fields(model, sender_id=sender_id)
+        return bool(fields and field_name in fields)
+
     def _call_kw_as_user(
         self, user_id: int, model: str, method: str, args: list[Any], kwargs: dict[str, Any]
     ) -> Any:

@@ -13,7 +13,7 @@ def find_task(
     project_id: int | None = None,
     stage_id: int | None = None,
     limit: int = 10,
-) -> list:
+) -> Any:
     domain: list[tuple[str, str, Any]] = []
     if name:
         domain.append(("name", "ilike", name))
@@ -43,7 +43,7 @@ def create_task(
     description: str | None = None,
     assigned_to: int | None = None,
     deadline: str | None = None,
-) -> int:
+) -> Any:
     values: dict[str, Any] = {"name": name}
     if project_id:
         values["project_id"] = project_id
@@ -65,7 +65,7 @@ def update_task(
     stage_id: int | None = None,
     assigned_to: int | None = None,
     deadline: str | None = None,
-) -> bool:
+) -> Any:
     values: dict[str, Any] = {}
     if stage_id:
         values["stage_id"] = stage_id
@@ -89,7 +89,7 @@ def find_my_tasks(
     date_deadline_from: str | None = None,
     date_deadline_to: str | None = None,
     limit: int = 20,
-) -> list:
+) -> Any:
     domain: list[tuple[str, str, Any]] = [("user_ids", "in", [user_id])]
 
     if project_id:
@@ -220,7 +220,7 @@ def get_task_stats(
     "tareas abiertas del proyecto X"), this function builds the domains.
     """
 
-    def _count(domain: list[tuple[str, str, Any]]) -> int:
+    def _count(domain: list[tuple[str, str, Any]]) -> Any:
         return client.call_kw(
             "project.task",
             "search_count",

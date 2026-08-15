@@ -1,11 +1,13 @@
+from typing import Any
+
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.security.audit import audit_action
 from odoo_mcp.services.partner_service import find_partner, get_partner_summary
 
 
 def odoo_find_partner(
-    client: OdooClient, user_id: int, name: str, vat: str = None, email: str = None
-) -> int:
+    client: OdooClient, user_id: int, name: str, vat: str | None = None, email: str | None = None
+) -> Any:
     """Wrapper for odoo_find_partner tool."""
     audit_action("FIND_PARTNER", user_id, "res.partner", [], {"name": name, "vat": vat})
     partner_id = find_partner(client, user_id, name, vat, email)

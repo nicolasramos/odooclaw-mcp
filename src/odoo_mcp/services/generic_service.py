@@ -1,3 +1,5 @@
+from typing import Any
+
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
 
@@ -13,7 +15,7 @@ SUMMARY_FIELDS = {
 }
 
 
-def get_record_summary(client: OdooClient, user_id: int, model: str, res_id: int) -> dict:
+def get_record_summary(client: OdooClient, user_id: int, model: str, res_id: int) -> Any:
     fields = SUMMARY_FIELDS.get(model, ["display_name"])
 
     _logger.info(f"Getting generic summary for {model} id {res_id}")

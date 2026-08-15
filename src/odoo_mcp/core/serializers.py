@@ -44,7 +44,7 @@ def serialize_records(
             else:
                 cleaned[k] = v
         if model and base_url and cleaned.get("id") is not None:
-            url = build_record_url(base_url, model, cleaned["id"])
+            url = build_record_url(base_url, model, int(cleaned["id"]))
             if url:
                 cleaned[RECORD_URL_KEY] = url
         res.append(cleaned)

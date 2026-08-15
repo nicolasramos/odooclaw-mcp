@@ -1,3 +1,5 @@
+from typing import Any
+
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.services.capability_service import (
     build_success_response,
@@ -5,11 +7,11 @@ from odoo_mcp.services.capability_service import (
 )
 
 
-def _line_fields(client: OdooClient, user_id: int) -> dict | None:
+def _line_fields(client: OdooClient, user_id: int) -> Any:
     return client.try_get_model_fields("contract.line", sender_id=user_id)
 
 
-def _contract_fields(client: OdooClient, user_id: int) -> dict | None:
+def _contract_fields(client: OdooClient, user_id: int) -> Any:
     return client.try_get_model_fields("contract.contract", sender_id=user_id)
 
 
@@ -31,7 +33,7 @@ def _unsupported_contracts() -> dict:
 def create_contract_line(
     client: OdooClient,
     user_id: int,
-    contract_id: int,
+    contract_id: int | None = None,
     product_id: int | None = None,
     name: str | None = None,
     quantity: float | None = None,
@@ -44,7 +46,7 @@ def create_contract_line(
     if not line_fields or not contract_fields:
         return _unsupported_contracts()
 
-    values = {}
+    values: dict[str, Any] = {}
     contract_field = _first_present(line_fields, "contract_id", "contract_line_id")
     if contract_field:
         values[contract_field] = contract_id
@@ -80,7 +82,7 @@ def close_contract_line(
     if not line_fields:
         return _unsupported_contracts()
 
-    values = {}
+    values: dict[str, Any] = {}
     if close_date and "date_end" in line_fields:
         values["date_end"] = close_date
     if reason:

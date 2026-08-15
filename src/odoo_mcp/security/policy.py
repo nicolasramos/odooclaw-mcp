@@ -1,5 +1,6 @@
 import os
 import time
+from typing import Any
 
 from odoo_mcp.config import DEFAULT_ALLOWED_MODELS, DEFAULT_DENIED_FIELDS, DEFAULT_DENIED_MODELS
 
@@ -134,7 +135,7 @@ def _compute_allowed_models(client=None, sender_id: int | None = None) -> set[st
     return allowed
 
 
-def _get_escape_hatch_models(client=None, sender_id: int | None = None) -> str:
+def _get_escape_hatch_models(client=None, sender_id: int | None = None) -> Any:
     """Get extra allowed models from ir.config_parameter or env var.
 
     Args:

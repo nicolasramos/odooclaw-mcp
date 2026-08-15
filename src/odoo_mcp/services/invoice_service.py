@@ -1,3 +1,5 @@
+from typing import Any
+
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
 from odoo_mcp.services.accounting_service import create_vendor_bill_from_ocr_validated
@@ -37,10 +39,11 @@ def create_vendor_invoice(
 def find_pending_invoices(
     client: OdooClient,
     user_id: int,
-    partner_id: int = None,
-    move_type: str = "out_invoice",
+    partner_id: int | None = None,
+    move_type: str | None = "out_invoice",
     limit: int = 50,
-) -> list:
+) -> Any:
+    move_type = move_type or "out_invoice"
     """
     Find invoices pending payment in Odoo 18.
 
@@ -92,7 +95,7 @@ def find_pending_invoices(
     )
 
 
-def get_invoice_summary(client: OdooClient, user_id: int, move_id: int) -> dict:
+def get_invoice_summary(client: OdooClient, user_id: int, move_id: int) -> Any:
     """Get a complete summary of a specific invoice (account.move)."""
     fields = [
         "id",
@@ -144,11 +147,11 @@ def register_payment(
     sender_id: int,
     invoice_id: int,
     amount: float,
-    payment_date: str = None,
-    journal_id: int = None,
+    payment_date: str | None = None,
+    journal_id: int | None = None,
 ) -> bool:
     """Register a payment for an invoice via the account.payment.register wizard."""
-    vals = {
+    vals: dict[str, Any] = {
         "amount": amount,
     }
     if payment_date:

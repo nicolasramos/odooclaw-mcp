@@ -1040,7 +1040,7 @@ def get_product_stock(
     sender_id: int,
     product_id: int,
     location_id: int | None = None,
-) -> list[dict[str, Any]]:
+) -> Any:
     result = get_product_stock_context(client, sender_id, product_id, location_id)
     if not result.get("ok"):
         raise ValueError(result.get("message", "Could not fetch product stock."))
@@ -1086,9 +1086,7 @@ def _read_receipt(client: OdooClient, sender_id: int, picking_id: int) -> dict[s
     return rows[0] if rows else {}
 
 
-def _read_receipt_moves(
-    client: OdooClient, sender_id: int, picking_id: int
-) -> list[dict[str, Any]]:
+def _read_receipt_moves(client: OdooClient, sender_id: int, picking_id: int) -> Any:
     if not _model_available(client, "stock.move", sender_id):
         return []
     fields = _available_fields(
@@ -1122,9 +1120,7 @@ def _read_receipt_moves(
     )
 
 
-def _read_receipt_move_lines(
-    client: OdooClient, sender_id: int, picking_id: int
-) -> list[dict[str, Any]]:
+def _read_receipt_move_lines(client: OdooClient, sender_id: int, picking_id: int) -> Any:
     if not _model_available(client, "stock.move.line", sender_id):
         return []
     fields = _available_fields(
@@ -2175,7 +2171,7 @@ def _validate_picking(
     dry_run: bool,
     capability: str,
     prepare,
-) -> dict:
+) -> Any:
     plan = prepare(client, sender_id, picking_id)
     if not plan.get("ok"):
         plan["capability"] = capability
@@ -2219,7 +2215,7 @@ def validate_delivery(
     picking_id: int,
     confirm: bool = False,
     dry_run: bool = True,
-) -> dict:
+) -> Any:
     return _validate_picking(
         client,
         sender_id,
@@ -2237,7 +2233,7 @@ def validate_transfer(
     picking_id: int,
     confirm: bool = False,
     dry_run: bool = True,
-) -> dict:
+) -> Any:
     return _validate_picking(
         client,
         sender_id,

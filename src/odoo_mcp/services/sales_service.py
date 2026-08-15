@@ -1,3 +1,5 @@
+from typing import Any
+
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
 
@@ -7,12 +9,12 @@ _logger = get_logger("sales_service")
 def find_sale_order(
     client: OdooClient,
     user_id: int,
-    name: str = None,
-    partner_id: int = None,
-    state: str = None,
+    name: str | None = None,
+    partner_id: int | None = None,
+    state: str | None = None,
     limit: int = 10,
-) -> list:
-    domain = []
+) -> Any:
+    domain: list[Any] = []
     if name:
         domain.append(("name", "ilike", name))
     if partner_id:
@@ -94,9 +96,9 @@ def get_sale_order_summary(client: OdooClient, user_id: int, order_id: int) -> d
     }
 
 
-def create_sale_order(client: OdooClient, sender_id: int, partner_id: int, lines: list) -> int:
+def create_sale_order(client: OdooClient, sender_id: int, partner_id: int, lines: list) -> Any:
     """Create a new sale.order with the provided lines."""
-    order_vals = {"partner_id": partner_id, "order_line": []}
+    order_vals: dict[str, Any] = {"partner_id": partner_id, "order_line": []}
 
     for line in lines:
         line_vals = {

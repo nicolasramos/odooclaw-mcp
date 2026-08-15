@@ -1,5 +1,6 @@
 import logging
 from datetime import date as date_cls
+from typing import Any
 
 from odoo_mcp.core.client import OdooClient
 
@@ -11,7 +12,7 @@ def _resolve_employee_id(
     sender_id: int,
     employee_id: int | None = None,
     user_id: int | None = None,
-) -> int | None:
+) -> Any:
     if employee_id:
         return employee_id
 
@@ -36,7 +37,7 @@ def find_attendance(
     date_from: str | None = None,
     date_to: str | None = None,
     limit: int = 50,
-) -> list:
+) -> Any:
     if not client.model_exists("hr.attendance", sender_id=sender_id):
         raise ValueError("Model hr.attendance is not available in this Odoo instance")
 
@@ -80,11 +81,12 @@ def log_timesheet(
     project_id: int,
     name: str,
     unit_amount: float,
-    date: str,
+    date: str | None,
     task_id: int | None = None,
     employee_id: int | None = None,
-) -> int:
+) -> Any:
     """Log a new timesheet entry."""
+    date = date or date_cls.today().isoformat()
     vals = {
         "project_id": project_id,
         "name": name,
@@ -115,7 +117,7 @@ def log_task_timesheet(
     unit_amount: float,
     date: str | None = None,
     employee_id: int | None = None,
-) -> int:
+) -> Any:
     if not client.model_exists("project.task", sender_id=sender_id):
         raise ValueError("Model project.task is not available in this Odoo instance")
     if not client.model_exists("account.analytic.line", sender_id=sender_id):

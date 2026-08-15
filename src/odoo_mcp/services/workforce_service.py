@@ -8,9 +8,7 @@ from odoo_mcp.observability.logging import get_logger
 _logger = get_logger("workforce_service")
 
 
-def _resolve_employee_id(
-    client: OdooClient, sender_id: int, employee_id: int | None = None
-) -> int | None:
+def _resolve_employee_id(client: OdooClient, sender_id: int, employee_id: int | None = None) -> Any:
     if employee_id:
         return employee_id
 

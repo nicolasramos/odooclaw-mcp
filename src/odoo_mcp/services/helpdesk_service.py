@@ -1,3 +1,5 @@
+from typing import Any
+
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
 from odoo_mcp.services.capability_service import (
@@ -8,7 +10,7 @@ from odoo_mcp.services.capability_service import (
 _logger = get_logger("helpdesk_service")
 
 
-def _helpdesk_fields(client: OdooClient, user_id: int) -> dict | None:
+def _helpdesk_fields(client: OdooClient, user_id: int) -> Any:
     return client.try_get_model_fields("helpdesk.ticket", sender_id=user_id)
 
 
@@ -21,7 +23,7 @@ def _ticket_values(
     team_id: int | None = None,
     priority: str | None = None,
 ) -> dict:
-    values = {"name": name}
+    values: dict[str, Any] = {"name": name}
     if description and "description" in fields:
         values["description"] = description
     if description and "ticket_description" in fields and "description" not in values:

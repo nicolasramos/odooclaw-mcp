@@ -3,6 +3,7 @@ from typing import Any
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.core.serializers import serialize_schema
+from odoo_mcp.security.guards import guard_model_access
 from odoo_mcp.services.capability_service import get_capabilities
 
 _logger = logging.getLogger(__name__)
@@ -10,6 +11,7 @@ _logger = logging.getLogger(__name__)
 
 def odoo_model_schema(client: OdooClient, user_id: int, model: str) -> str:
     """Retrieve and serialize fields schema for a given model."""
+    guard_model_access(model, client, sender_id=user_id)
     try:
         fields_info = client.call_kw(model, "fields_get", sender_id=user_id)
         summary = {}

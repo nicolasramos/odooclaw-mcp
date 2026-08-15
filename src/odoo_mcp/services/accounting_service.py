@@ -115,7 +115,7 @@ def _resolve_vendor_from_ocr(
         attempts.append(("ref", ref, [["ref", "=", ref]]))
     name = _first_text(payload, ["vendor_name", "partner_name", "supplier_name", "commercial_name"])
     if name:
-        domain = [["name", "ilike", name]]
+        domain: list[list[Any]] = [["name", "ilike", name]]
         if _safe_field_exists(client, "res.partner", "supplier_rank", sender_id):
             domain.append(["supplier_rank", ">", 0])
         attempts.append(("name", name, domain))
@@ -467,7 +467,7 @@ def reconcile_bank_line(
             ["account.bank.statement.line"],
         )
 
-    attempts = [
+    attempts: list[Any] = [
         (
             "process_reconciliation",
             [
@@ -705,8 +705,8 @@ def get_ar_ap_aging(
 def run_period_close_checks(
     client: OdooClient,
     sender_id: int,
-    period_start: str,
-    period_end: str,
+    period_start: str | None,
+    period_end: str | None,
     company_id: int | None = None,
 ) -> dict:
     if not client.model_exists("account.move", sender_id=sender_id):
@@ -787,7 +787,7 @@ def create_journal_entry(
     client: OdooClient,
     sender_id: int,
     journal_id: int,
-    entry_date: str,
+    entry_date: str | None,
     lines: list[dict[str, Any]],
     ref: str | None = None,
     company_id: int | None = None,
@@ -798,6 +798,7 @@ def create_journal_entry(
             "account.move model is not available in this Odoo instance.",
             ["account.move"],
         )
+    entry_date = entry_date or date.today().isoformat()
     if not lines:
         raise ValueError("Journal entry requires at least one line.")
 
@@ -875,8 +876,8 @@ def post_journal_entry(
 def get_tax_summary(
     client: OdooClient,
     sender_id: int,
-    date_from: str,
-    date_to: str,
+    date_from: str | None,
+    date_to: str | None,
     company_id: int | None = None,
     tax_group_id: int | None = None,
 ) -> dict:
@@ -886,6 +887,9 @@ def get_tax_summary(
             "account.move.line model is not available in this Odoo instance.",
             ["account.move.line"],
         )
+
+    date_from = date_from or "1970-01-01"
+    date_to = date_to or "2999-12-31"
 
     domain: list[list[Any]] = [
         ["tax_line_id", "!=", False],
@@ -1047,7 +1051,7 @@ def suggest_expense_account_and_taxes(
     client: OdooClient,
     sender_id: int,
     description: str,
-    amount: float,
+    amount: float | None,
     partner_id: int | None = None,
     product_id: int | None = None,
     company_id: int | None = None,
@@ -1058,6 +1062,8 @@ def suggest_expense_account_and_taxes(
             "account.move.line model is not available in this Odoo instance.",
             ["account.move.line"],
         )
+
+    amount = amount or 0.0
 
     domain: list[list[Any]] = [
         ["display_type", "=", False],
@@ -1392,7 +1398,7 @@ def get_financial_snapshot(
 
     month_start = date.today().replace(day=1)
 
-    def _moves(move_types: list[str], state: str = "posted") -> list[dict]:
+    def _moves(move_types: list[str], state: str = "posted") -> Any:
         domain: list[list[Any]] = [
             ["move_type", "in", move_types],
             ["state", "=", state],

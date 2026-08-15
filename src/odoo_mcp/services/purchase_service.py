@@ -89,12 +89,12 @@ def _oca_purchase_capabilities(client: OdooClient, sender_id: int) -> dict[str, 
     }
 
 
-def create_purchase_order(client: OdooClient, user_id: int, partner_id: int, lines: list) -> int:
+def create_purchase_order(client: OdooClient, user_id: int, partner_id: int, lines: list) -> Any:
     """
     Creates a purchase order with multiple lines.
     lines format: [{"product_id": 1, "product_qty": 2.0, "price_unit": 100.0}]
     """
-    order_vals = {"partner_id": partner_id, "order_line": []}
+    order_vals: dict[str, Any] = {"partner_id": partner_id, "order_line": []}
 
     for line in lines:
         order_vals["order_line"].append(
@@ -205,9 +205,7 @@ def _read_purchase_order(client: OdooClient, sender_id: int, order_id: int) -> d
     return rows[0] if rows else {}
 
 
-def _read_purchase_order_lines(
-    client: OdooClient, sender_id: int, order_id: int
-) -> list[dict[str, Any]]:
+def _read_purchase_order_lines(client: OdooClient, sender_id: int, order_id: int) -> Any:
     if not _model_available(client, "purchase.order.line", sender_id):
         return []
     fields = _available_fields(

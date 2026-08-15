@@ -87,10 +87,9 @@ def _validate_fields(
     return clean_fields
 
 
-def odoo_search(
-    client: OdooClient, user_id: int, model: str, domain: list[Any], limit: int
-) -> list[int]:
+def odoo_search(client: OdooClient, user_id: int, model: str, domain: list[Any], limit: int) -> Any:
     """Search for record IDs matching domain."""
+    guard_model_access(model, client, sender_id=user_id)
     validate_domain(domain)
     return client.call_kw(
         model, "search", args=[domain], kwargs={"limit": limit}, sender_id=user_id
@@ -105,6 +104,7 @@ def odoo_read(
     fields: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Read fields for a list of record IDs."""
+    guard_model_access(model, client, sender_id=user_id)
     clean = _validate_fields(client, model, fields, user_id)
     kwargs = {"fields": clean} if clean else {}
     records = client.call_kw(model, "read", args=[ids], kwargs=kwargs, sender_id=user_id)
@@ -120,16 +120,17 @@ def odoo_search_read(
     limit: int = 80,
 ) -> list[dict[str, Any]]:
     """Search and read in a single call."""
+    guard_model_access(model, client, sender_id=user_id)
     validate_domain(domain)
     clean = _validate_fields(client, model, fields, user_id)
-    kwargs = {"limit": limit}
+    kwargs: dict[str, Any] = {"limit": limit}
     if clean:
         kwargs["fields"] = clean
     records = client.call_kw(model, "search_read", args=[domain], kwargs=kwargs, sender_id=user_id)
     return serialize_records(records, model=model, base_url=client.odoo_session.url)
 
 
-def odoo_create(client: OdooClient, user_id: int, model: str, values: dict[str, Any]) -> int:
+def odoo_create(client: OdooClient, user_id: int, model: str, values: dict[str, Any]) -> Any:
     """Create a new record after checking allowlist."""
     guard_model_access(model, client, sender_id=user_id)
     audit_action("CREATE", user_id, model, [], values)
@@ -151,7 +152,7 @@ def odoo_create(client: OdooClient, user_id: int, model: str, values: dict[str, 
 
 def odoo_write(
     client: OdooClient, user_id: int, model: str, ids: list[int], values: dict[str, Any]
-) -> bool:
+) -> Any:
     """Update records, respecting denylists and allowlists."""
     guard_model_access(model, client, sender_id=user_id)
     guard_write_fields(values)

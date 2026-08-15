@@ -1,3 +1,5 @@
+from typing import Any
+
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
 
@@ -11,7 +13,7 @@ def _normalize_partner_name(name: str | None) -> str | None:
     return normalized or None
 
 
-def _search_partner_id(client: OdooClient, user_id: int, domain: list) -> int | None:
+def _search_partner_id(client: OdooClient, user_id: int, domain: list) -> Any:
     partners = client.call_kw(
         "res.partner",
         "search_read",
@@ -31,7 +33,7 @@ def find_existing_partner_id(
     vat: str | None = None,
     email: str | None = None,
     allow_fuzzy_name: bool = False,
-) -> int | None:
+) -> Any:
     normalized_name = _normalize_partner_name(name)
 
     if vat:
@@ -65,7 +67,7 @@ def find_partner(
     name: str,
     vat: str | None = None,
     email: str | None = None,
-) -> int | None:
+) -> Any:
     partner_id = find_existing_partner_id(
         client,
         user_id,
@@ -85,7 +87,7 @@ def find_or_create_partner(
     name: str,
     vat: str | None = None,
     email: str | None = None,
-) -> int:
+) -> Any:
     partner_id = find_existing_partner_id(
         client,
         user_id,

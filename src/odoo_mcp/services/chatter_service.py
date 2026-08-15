@@ -1,3 +1,5 @@
+from typing import Any
+
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
 from odoo_mcp.services.capability_service import (
@@ -14,10 +16,10 @@ def create_activity(
     model: str,
     res_id: int,
     summary: str,
-    note: str = None,
-    assign_to: int = None,
-    date_deadline: str = None,
-) -> int:
+    note: str | None = None,
+    assign_to: int | None = None,
+    date_deadline: str | None = None,
+) -> Any:
     values = {
         "res_model": model,
         "res_id": res_id,
@@ -46,9 +48,9 @@ def create_activity(
 
 
 def list_pending_activities(
-    client: OdooClient, user_id: int, model: str = None, assign_to: int = None
-) -> list:
-    domain = []
+    client: OdooClient, user_id: int, model: str | None = None, assign_to: int | None = None
+) -> Any:
+    domain: list[Any] = []
     if model:
         domain.append(("res_model", "=", model))
     if assign_to:
@@ -75,7 +77,7 @@ def list_pending_activities(
 
 
 def mark_activity_done(
-    client: OdooClient, user_id: int, activity_id: int, feedback: str = None
+    client: OdooClient, user_id: int, activity_id: int, feedback: str | None = None
 ) -> bool:
     _logger.info(f"Marking activity {activity_id} as done")
     kwargs = {}
@@ -94,7 +96,7 @@ def mark_activity_done(
 
 def post_chatter_message(
     client: OdooClient, user_id: int, model: str, res_id: int, body: str
-) -> int:
+) -> Any:
     _logger.info(f"Posting chatter message on {model} id {res_id}")
     return client.call_kw(
         model,
@@ -111,8 +113,8 @@ def create_activity_summary(
     model: str,
     res_id: int,
     summary: str,
-    note: str = None,
-    assign_to: int = None,
+    note: str | None = None,
+    assign_to: int | None = None,
 ) -> dict:
     if not client.model_exists("mail.activity", sender_id=user_id):
         return build_unsupported_response(
@@ -146,7 +148,7 @@ def create_activity_summary(
 
 
 def close_activity_with_reason(
-    client: OdooClient, user_id: int, activity_id: int, reason: str = None
+    client: OdooClient, user_id: int, activity_id: int, reason: str | None = None
 ) -> dict:
     if not client.model_exists("mail.activity", sender_id=user_id):
         return build_unsupported_response(
