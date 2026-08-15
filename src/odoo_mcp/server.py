@@ -4,102 +4,17 @@ from functools import lru_cache
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+
 from odoo_mcp.config import DEFAULT_SEARCH_LIMIT
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.core.session import OdooSession
 from odoo_mcp.observability.logging import get_logger
 from odoo_mcp.observability.metrics import measure_time
-from odoo_mcp.schemas.actions import OdooInvokeActionSchema
 from odoo_mcp.schemas.business import (
-    ApplyReportPatchSafeSchema,
-    ApplyViewPatchSafeSchema,
-    ApproveExpenseSchema,
-    AssistReportMigrationSchema,
-    AssistViewMigrationSchema,
-    BatchAssistReportMigrationSchema,
-    BatchAssistViewMigrationSchema,
-    CheckInSchema,
-    CheckOutSchema,
-    CloseActivityWithReasonSchema,
-    CloseContractLineSchema,
-    ConfirmSaleOrderSchema,
-    CreateActivitySchema,
-    CreateActivitySummarySchema,
-    CreateCalendarEventSchema,
-    CreateContractLineSchema,
-    CreateExpenseReportSchema,
-    CreateHelpdeskTicketFromPartnerSchema,
-    CreateHelpdeskTicketSchema,
-    CreateJournalEntrySchema,
-    CreateLeadSchema,
-    CreatePurchaseOrderSchema,
-    CreateSaleOrderSchema,
-    CreateTaskSchema,
-    CreateVendorBillFromOCRValidatedSchema,
-    CreateVendorInvoiceSchema,
-    DraftTicketEmailSchema,
-    FindAttendanceSchema,
-    FindMissingTimesheetsSchema,
-    FindMyTasksSchema,
-    FindPartnerSchema,
-    FindPendingInvoicesSchema,
-    FindSaleOrderSchema,
-    FindTaskSchema,
-    FindUnreconciledBankLinesSchema,
-    FindViewsByModelSchema,
-    GetARAPAgingSchema,
-    GetCapabilitiesSchema,
-    GetInvoiceSummarySchema,
-    GetModelSchemaSchema,
-    GetMyTodaySummarySchema,
-    GetPartnerSummarySchema,
-    GetProductStockSchema,
-    GetRecordSummarySchema,
-    GetReportTemplateSchema,
-    GetSaleOrderSummarySchema,
-    GetTaxSummarySchema,
-    GetViewByXmlIdSchema,
     InvoiceLineSchema,
     JournalEntryLineSchema,
-    ListPendingActivitiesSchema,
-    LogTaskTimesheetSchema,
-    LogTimesheetSchema,
-    MarkActivityDoneSchema,
-    NotifyPendingActionsSchema,
     POLineSchema,
-    PostChatterMessageSchema,
-    PostJournalEntrySchema,
-    PreviewReportPatchSchema,
-    PreviewViewPatchSchema,
-    ProposeReportPatchSchema,
-    ProposeViewPatchSchema,
-    ReconcileBankLineSchema,
-    RegisterInvoicePaymentSchema,
-    RegisterPaymentSchema,
-    ReplaceContractLineSchema,
-    RollbackPatchSafeSchema,
-    RunPeriodCloseChecksSchema,
     SOLineSchema,
-    ScanReportMigrationIssuesSchema,
-    ScanViewMigrationIssuesSchema,
-    SubmitExpenseReportSchema,
-    SuggestBankReconciliationSchema,
-    SuggestExpenseAccountAndTaxesSchema,
-    SuggestTimesheetFromAttendanceSchema,
-    TestViewCompilationSchema,
-    UpdateTaskSchema,
-    UpdateTaskStatusSchema,
-    ValidateReportPatchSchema,
-    ValidateVendorBillDuplicateSchema,
-    ValidateViewPatchSchema,
-    VisualizeReportPatchSchema,
-    VisualizeViewPatchSchema,
-)
-from odoo_mcp.schemas.records import (
-    OdooCreateSchema,
-    OdooReadSchema,
-    OdooSearchSchema,
-    OdooWriteSchema,
 )
 from odoo_mcp.services.accounting_service import (
     create_journal_entry,
@@ -125,15 +40,17 @@ from odoo_mcp.services.hr_service import (
 from odoo_mcp.services.inventory_service import (
     apply_inventory_adjustment,
     check_lot_requirements,
+    create_internal_transfer,
     explain_stock_forecast,
+    find_internal_transfers,
+    find_inventory_discrepancies,
+    find_lot_serial,
     find_product,
     find_purchase_receipts,
     find_reordering_rules,
     find_sale_deliveries,
-    find_internal_transfers,
-    find_inventory_discrepancies,
-    find_lot_serial,
     find_stock_locations,
+    get_delivery_summary,
     get_location_stock_summary,
     get_logistics_capabilities,
     get_lot_traceability,
@@ -141,20 +58,18 @@ from odoo_mcp.services.inventory_service import (
     get_product_stock_context,
     get_product_summary,
     get_product_supplier_info,
-    get_replenishment_suggestions,
     get_receipt_summary,
-    get_delivery_summary,
-    get_transfer_summary,
+    get_replenishment_suggestions,
     get_stock_availability,
     get_stock_moves,
+    get_transfer_summary,
     match_delivery_to_sale_order,
     match_receipt_to_purchase_order,
-    prepare_receipt_validation,
     prepare_delivery_validation,
-    prepare_transfer_validation,
     prepare_internal_transfer,
     prepare_inventory_adjustment,
-    create_internal_transfer,
+    prepare_receipt_validation,
+    prepare_transfer_validation,
     validate_delivery,
     validate_receipt,
     validate_transfer,
@@ -311,9 +226,7 @@ def get_resource_record_summary(model: str, id: str) -> str:
     client = get_odoo_client()
     import json
 
-    res = generic.odoo_get_record_summary(
-        client, client.odoo_session.uid, model, int(id)
-    )
+    res = generic.odoo_get_record_summary(client, client.odoo_session.uid, model, int(id))
     return json.dumps(res, indent=2)
 
 
@@ -727,8 +640,6 @@ def odoo_create_vendor_invoice(
         )
 
 
-
-
 @mcp.tool()
 def odoo_apply_inventory_adjustment(
     quant_id: int,
@@ -748,11 +659,15 @@ def odoo_apply_inventory_adjustment(
             dry_run,
         )
 
+
 @mcp.tool()
 def odoo_check_lot_requirements(picking_id: int, sender_id: int | None = None) -> dict:
     with measure_time("odoo_check_lot_requirements"):
         client = get_odoo_client()
-        return check_lot_requirements(client, sender_id or client.odoo_session.get_uid(), picking_id)
+        return check_lot_requirements(
+            client, sender_id or client.odoo_session.get_uid(), picking_id
+        )
+
 
 @mcp.tool()
 def odoo_create_internal_transfer(
@@ -779,6 +694,7 @@ def odoo_create_internal_transfer(
             dry_run,
         )
 
+
 @mcp.tool()
 def odoo_explain_stock_forecast(
     product_id: int,
@@ -794,6 +710,7 @@ def odoo_explain_stock_forecast(
             limit=limit,
         )
 
+
 @mcp.tool()
 def odoo_find_internal_transfers(
     state: str | None = None,
@@ -807,6 +724,7 @@ def odoo_find_internal_transfers(
         return find_internal_transfers(
             client, sender_id or client.odoo_session.get_uid(), state, date_from, date_to, limit
         )
+
 
 @mcp.tool()
 def odoo_find_inventory_discrepancies(
@@ -827,6 +745,7 @@ def odoo_find_inventory_discrepancies(
             limit,
         )
 
+
 @mcp.tool()
 def odoo_find_lot_serial(
     name: str | None = None,
@@ -840,6 +759,7 @@ def odoo_find_lot_serial(
         return find_lot_serial(
             client, sender_id or client.odoo_session.get_uid(), name, product_id, company_id, limit
         )
+
 
 @mcp.tool()
 def odoo_find_product(
@@ -864,6 +784,7 @@ def odoo_find_product(
             limit=limit,
         )
 
+
 @mcp.tool()
 def odoo_find_purchase_order(
     name: str | None = None,
@@ -877,6 +798,7 @@ def odoo_find_purchase_order(
         return purchases.odoo_find_purchase_order(
             client, sender_id or client.odoo_session.get_uid(), name, partner_id, state, limit
         )
+
 
 @mcp.tool()
 def odoo_find_purchase_receipts(
@@ -901,6 +823,7 @@ def odoo_find_purchase_receipts(
             limit=limit,
         )
 
+
 @mcp.tool()
 def odoo_find_reordering_rules(
     product_id: int | None = None,
@@ -922,6 +845,7 @@ def odoo_find_reordering_rules(
             limit,
         )
 
+
 @mcp.tool()
 def odoo_find_sale_deliveries(
     sale_order_id: int | None = None,
@@ -935,9 +859,16 @@ def odoo_find_sale_deliveries(
     with measure_time("odoo_find_sale_deliveries"):
         client = get_odoo_client()
         return find_sale_deliveries(
-            client, sender_id or client.odoo_session.get_uid(), sale_order_id, partner_id,
-            state, date_from, date_to, limit
+            client,
+            sender_id or client.odoo_session.get_uid(),
+            sale_order_id,
+            partner_id,
+            state,
+            date_from,
+            date_to,
+            limit,
         )
+
 
 @mcp.tool()
 def odoo_find_stock_locations(
@@ -956,6 +887,7 @@ def odoo_find_stock_locations(
             limit=limit,
         )
 
+
 @mcp.tool()
 def odoo_find_tasks_for_user(
     user_name: str,
@@ -972,11 +904,13 @@ def odoo_find_tasks_for_user(
             limit,
         )
 
+
 @mcp.tool()
 def odoo_get_delivery_summary(picking_id: int, sender_id: int | None = None) -> dict:
     with measure_time("odoo_get_delivery_summary"):
         client = get_odoo_client()
         return get_delivery_summary(client, sender_id or client.odoo_session.get_uid(), picking_id)
+
 
 @mcp.tool()
 def odoo_get_financial_snapshot(
@@ -993,6 +927,7 @@ def odoo_get_financial_snapshot(
             company_id=company_id,
             limit=limit,
         )
+
 
 @mcp.tool()
 def odoo_get_location_stock_summary(
@@ -1011,6 +946,7 @@ def odoo_get_location_stock_summary(
             limit=limit,
         )
 
+
 @mcp.tool()
 def odoo_get_logistics_capabilities(sender_id: int | None = None) -> dict:
     with measure_time("odoo_get_logistics_capabilities"):
@@ -1020,11 +956,13 @@ def odoo_get_logistics_capabilities(sender_id: int | None = None) -> dict:
             sender_id or client.odoo_session.get_uid(),
         )
 
+
 @mcp.tool()
 def odoo_get_lot_traceability(lot_id: int, sender_id: int | None = None) -> dict:
     with measure_time("odoo_get_lot_traceability"):
         client = get_odoo_client()
         return get_lot_traceability(client, sender_id or client.odoo_session.get_uid(), lot_id)
+
 
 @mcp.tool()
 def odoo_get_product_stock_context(
@@ -1041,6 +979,7 @@ def odoo_get_product_stock_context(
             location_id=location_id,
         )
 
+
 @mcp.tool()
 def odoo_get_product_summary(
     product_id: int,
@@ -1053,6 +992,7 @@ def odoo_get_product_summary(
             sender_id=sender_id or client.odoo_session.get_uid(),
             product_id=product_id,
         )
+
 
 @mcp.tool()
 def odoo_get_product_supplier_info(
@@ -1071,6 +1011,7 @@ def odoo_get_product_supplier_info(
             limit=limit,
         )
 
+
 @mcp.tool()
 def odoo_get_purchase_invoice_status(
     purchase_order_id: int,
@@ -1081,6 +1022,7 @@ def odoo_get_purchase_invoice_status(
         return purchases.odoo_get_purchase_invoice_status(
             client, sender_id or client.odoo_session.get_uid(), purchase_order_id
         )
+
 
 @mcp.tool()
 def odoo_get_purchase_order_summary(
@@ -1093,6 +1035,7 @@ def odoo_get_purchase_order_summary(
             client, sender_id or client.odoo_session.get_uid(), order_id
         )
 
+
 @mcp.tool()
 def odoo_get_purchase_receipt_status(
     purchase_order_id: int,
@@ -1103,6 +1046,7 @@ def odoo_get_purchase_receipt_status(
         return purchases.odoo_get_purchase_receipt_status(
             client, sender_id or client.odoo_session.get_uid(), purchase_order_id
         )
+
 
 @mcp.tool()
 def odoo_get_receipt_summary(
@@ -1116,6 +1060,7 @@ def odoo_get_receipt_summary(
             sender_id=sender_id or client.odoo_session.get_uid(),
             picking_id=picking_id,
         )
+
 
 @mcp.tool()
 def odoo_get_replenishment_suggestions(
@@ -1136,6 +1081,7 @@ def odoo_get_replenishment_suggestions(
             limit,
         )
 
+
 @mcp.tool()
 def odoo_get_stock_availability(
     product_ids: list[int],
@@ -1150,6 +1096,7 @@ def odoo_get_stock_availability(
             product_ids=product_ids,
             location_id=location_id,
         )
+
 
 @mcp.tool()
 def odoo_get_stock_moves(
@@ -1174,6 +1121,7 @@ def odoo_get_stock_moves(
             limit=limit,
         )
 
+
 @mcp.tool()
 def odoo_get_task_stats(
     project_id: int | None = None,
@@ -1190,11 +1138,13 @@ def odoo_get_task_stats(
             user_ids,
         )
 
+
 @mcp.tool()
 def odoo_get_transfer_summary(picking_id: int, sender_id: int | None = None) -> dict:
     with measure_time("odoo_get_transfer_summary"):
         client = get_odoo_client()
         return get_transfer_summary(client, sender_id or client.odoo_session.get_uid(), picking_id)
+
 
 @mcp.tool()
 def odoo_match_delivery_to_sale_order(
@@ -1211,6 +1161,7 @@ def odoo_match_delivery_to_sale_order(
             sale_order_id,
         )
 
+
 @mcp.tool()
 def odoo_match_receipt_to_purchase_order(
     picking_id: int,
@@ -1225,6 +1176,7 @@ def odoo_match_receipt_to_purchase_order(
             picking_id=picking_id,
             purchase_order_id=purchase_order_id,
         )
+
 
 @mcp.tool()
 def odoo_match_vendor_bill_to_purchase_order(
@@ -1247,11 +1199,15 @@ def odoo_match_vendor_bill_to_purchase_order(
             tolerance,
         )
 
+
 @mcp.tool()
 def odoo_prepare_delivery_validation(picking_id: int, sender_id: int | None = None) -> dict:
     with measure_time("odoo_prepare_delivery_validation"):
         client = get_odoo_client()
-        return prepare_delivery_validation(client, sender_id or client.odoo_session.get_uid(), picking_id)
+        return prepare_delivery_validation(
+            client, sender_id or client.odoo_session.get_uid(), picking_id
+        )
+
 
 @mcp.tool()
 def odoo_prepare_internal_transfer(
@@ -1274,6 +1230,7 @@ def odoo_prepare_internal_transfer(
             origin,
         )
 
+
 @mcp.tool()
 def odoo_prepare_inventory_adjustment(
     quant_id: int,
@@ -1289,6 +1246,7 @@ def odoo_prepare_inventory_adjustment(
             counted_quantity,
         )
 
+
 @mcp.tool()
 def odoo_prepare_receipt_validation(
     picking_id: int,
@@ -1302,11 +1260,15 @@ def odoo_prepare_receipt_validation(
             picking_id=picking_id,
         )
 
+
 @mcp.tool()
 def odoo_prepare_transfer_validation(picking_id: int, sender_id: int | None = None) -> dict:
     with measure_time("odoo_prepare_transfer_validation"):
         client = get_odoo_client()
-        return prepare_transfer_validation(client, sender_id or client.odoo_session.get_uid(), picking_id)
+        return prepare_transfer_validation(
+            client, sender_id or client.odoo_session.get_uid(), picking_id
+        )
+
 
 @mcp.tool()
 def odoo_suggest_vendor_products(
@@ -1321,6 +1283,7 @@ def odoo_suggest_vendor_products(
             client, sender_id or client.odoo_session.get_uid(), partner_id, query, limit
         )
 
+
 @mcp.tool()
 def odoo_validate_delivery(
     picking_id: int,
@@ -1333,6 +1296,7 @@ def odoo_validate_delivery(
         return validate_delivery(
             client, sender_id or client.odoo_session.get_uid(), picking_id, confirm, dry_run
         )
+
 
 @mcp.tool()
 def odoo_validate_receipt(
@@ -1351,6 +1315,7 @@ def odoo_validate_receipt(
             dry_run=dry_run,
         )
 
+
 @mcp.tool()
 def odoo_validate_transfer(
     picking_id: int,
@@ -1363,11 +1328,6 @@ def odoo_validate_transfer(
         return validate_transfer(
             client, sender_id or client.odoo_session.get_uid(), picking_id, confirm, dry_run
         )
-
-
-
-if __name__ == "__main__":
-    mcp.run()
 
 
 @mcp.tool()
@@ -1404,9 +1364,7 @@ def odoo_get_invoice_summary(
     """Get complete details of a specific invoice (account.move), including lines."""
     with measure_time("odoo_get_invoice_summary"):
         client = get_odoo_client()
-        return get_invoice_summary(
-            client, sender_id or client.odoo_session.uid, move_id
-        )
+        return get_invoice_summary(client, sender_id or client.odoo_session.uid, move_id)
 
 
 @mcp.tool()
@@ -1419,9 +1377,7 @@ def odoo_get_model_schema(
     """
     with measure_time("odoo_get_model_schema"):
         client = get_odoo_client()
-        return introspection.odoo_model_schema(
-            client, sender_id or client.odoo_session.uid, model
-        )
+        return introspection.odoo_model_schema(client, sender_id or client.odoo_session.uid, model)
 
 
 @mcp.tool()
@@ -1430,9 +1386,7 @@ def odoo_get_capabilities(
 ) -> dict:
     with measure_time("odoo_get_capabilities"):
         client = get_odoo_client()
-        return business_ops.odoo_get_capabilities(
-            client, sender_id or client.odoo_session.uid
-        )
+        return business_ops.odoo_get_capabilities(client, sender_id or client.odoo_session.uid)
 
 
 @mcp.tool()
@@ -2622,3 +2576,7 @@ def odoo_batch_assist_report_migration(
             strict=strict,
             continue_on_error=continue_on_error,
         )
+
+
+if __name__ == "__main__":
+    mcp.run()

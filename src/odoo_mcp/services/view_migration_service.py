@@ -110,9 +110,7 @@ def _scan_arch_migration_issues(
         )
 
     if target_version.startswith(("17", "18")):
-        if re.search(r"\battrs\s*=", arch_text) or re.search(
-            r"\bstates\s*=", arch_text
-        ):
+        if re.search(r"\battrs\s*=", arch_text) or re.search(r"\bstates\s*=", arch_text):
             add_issue(
                 "ATTRS_STATES_LEGACY",
                 "high",
@@ -431,17 +429,11 @@ def find_views_by_model(
         "ir.ui.view",
         {"model": model, "view_type": view_type, "limit": limit, "count": len(rows)},
     )
-    return build_success_response(
-        "views.find_views_by_model", count=len(rows), views=rows
-    )
+    return build_success_response("views.find_views_by_model", count=len(rows), views=rows)
 
 
-def get_report_template(
-    client: OdooClient, sender_id: int, xmlid: str
-) -> dict[str, Any]:
-    xml_row = _resolve_xmlid(
-        client, sender_id, xmlid, expected_model="ir.actions.report"
-    )
+def get_report_template(client: OdooClient, sender_id: int, xmlid: str) -> dict[str, Any]:
+    xml_row = _resolve_xmlid(client, sender_id, xmlid, expected_model="ir.actions.report")
     if not xml_row:
         return {
             "ok": False,
@@ -512,16 +504,12 @@ def scan_view_migration_issues(
     target_version: str,
     rule_sets: list[str] | None = None,
 ) -> dict[str, Any]:
-    view_response = get_view_by_xmlid(
-        client, sender_id, xmlid, include_inherited_chain=False
-    )
+    view_response = get_view_by_xmlid(client, sender_id, xmlid, include_inherited_chain=False)
     if not view_response.get("ok"):
         return view_response
 
     arch_text = view_response["view"].get("arch_db") or ""
-    issues = _scan_arch_migration_issues(
-        arch_text, target_version=target_version, is_qweb=False
-    )
+    issues = _scan_arch_migration_issues(arch_text, target_version=target_version, is_qweb=False)
     summary = _issue_summary(issues)
     log_audit_event(
         "VIEW_SCAN",
@@ -554,9 +542,7 @@ def scan_report_migration_issues(
 
     template = report_response.get("template") or {}
     arch_text = template.get("arch_db") or ""
-    issues = _scan_arch_migration_issues(
-        arch_text, target_version=target_version, is_qweb=True
-    )
+    issues = _scan_arch_migration_issues(arch_text, target_version=target_version, is_qweb=True)
     summary = _issue_summary(issues)
     log_audit_event(
         "REPORT_SCAN",
@@ -693,25 +679,19 @@ def validate_view_patch(
         # advisory patch does not directly execute xpath mutations
         checks["xpath_matches"] = []
     else:
-        errors.append(
-            "Unsupported patch_format. Use xml_inheritance or advisory_patch."
-        )
+        errors.append("Unsupported patch_format. Use xml_inheritance or advisory_patch.")
 
     if re.search(r"<\s*record\b", str(patch)):
         checks["forbidden_patterns"].append("record_tag")
         errors.append("Patch must not include <record> declarations.")
 
     simulated_after = (
-        _apply_advisory_patch(base_arch, patch)
-        if patch_format == "advisory_patch"
-        else base_arch
+        _apply_advisory_patch(base_arch, patch) if patch_format == "advisory_patch" else base_arch
     )
     issues_after = _scan_arch_migration_issues(
         simulated_after, target_version=target_version, is_qweb=False
     )
-    checks["version_compatibility"] = (
-        len([i for i in issues_after if i["severity"] == "high"]) == 0
-    )
+    checks["version_compatibility"] = len([i for i in issues_after if i["severity"] == "high"]) == 0
     if not checks["version_compatibility"]:
         warnings.append("Patch still leaves high-severity migration issues.")
 
@@ -774,25 +754,19 @@ def validate_report_patch(
     elif patch_format == "advisory_patch":
         checks["xpath_matches"] = []
     else:
-        errors.append(
-            "Unsupported patch_format. Use xml_inheritance or advisory_patch."
-        )
+        errors.append("Unsupported patch_format. Use xml_inheritance or advisory_patch.")
 
     if re.search(r"\bt-raw\s*=", str(patch)):
         checks["forbidden_patterns"].append("t-raw")
         warnings.append("Patch includes t-raw usage. Review security implications.")
 
     simulated_after = (
-        _apply_advisory_patch(base_arch, patch)
-        if patch_format == "advisory_patch"
-        else base_arch
+        _apply_advisory_patch(base_arch, patch) if patch_format == "advisory_patch" else base_arch
     )
     issues_after = _scan_arch_migration_issues(
         simulated_after, target_version=target_version, is_qweb=True
     )
-    checks["version_compatibility"] = (
-        len([i for i in issues_after if i["severity"] == "high"]) == 0
-    )
+    checks["version_compatibility"] = len([i for i in issues_after if i["severity"] == "high"]) == 0
     if not checks["version_compatibility"]:
         warnings.append("Patch still leaves high-severity migration issues.")
 
@@ -863,9 +837,7 @@ def test_view_compilation(
     view_xmlid: str,
     context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    view_response = get_view_by_xmlid(
-        client, sender_id, view_xmlid, include_inherited_chain=False
-    )
+    view_response = get_view_by_xmlid(client, sender_id, view_xmlid, include_inherited_chain=False)
     if not view_response.get("ok"):
         return view_response
 
@@ -960,8 +932,7 @@ def apply_view_patch_safe(
         }
 
     create_vals = {
-        "name": inherited_view_name
-        or f"mcp.patch.{base_view.get('name') or base_view_xmlid}",
+        "name": inherited_view_name or f"mcp.patch.{base_view.get('name') or base_view_xmlid}",
         "type": base_view.get("type") or "form",
         "model": base_view.get("model"),
         "inherit_id": int(base_view.get("id")),
@@ -1100,8 +1071,7 @@ def apply_report_patch_safe(
 
     report = report_response.get("report") or {}
     create_vals = {
-        "name": inherited_view_name
-        or f"mcp.patch.{report.get('name') or report_xmlid}",
+        "name": inherited_view_name or f"mcp.patch.{report.get('name') or report_xmlid}",
         "type": "qweb",
         "inherit_id": int(template.get("id")),
         "mode": "extension",
@@ -1389,9 +1359,7 @@ def assist_view_migration(
         patch=patch,
     )
     compilation = (
-        test_view_compilation(client, sender_id, view_xmlid=xmlid)
-        if include_compile_test
-        else None
+        test_view_compilation(client, sender_id, view_xmlid=xmlid) if include_compile_test else None
     )
 
     risk_level = proposal.get("risk_level", "medium")

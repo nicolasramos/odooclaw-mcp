@@ -4,6 +4,7 @@ from odoo_mcp.core.client import OdooClient
 
 _logger = logging.getLogger(__name__)
 
+
 def create_lead(
     client: OdooClient,
     sender_id: int,
@@ -11,12 +12,12 @@ def create_lead(
     partner_id: int | None = None,
     expected_revenue: float | None = None,
     probability: float | None = None,
-    description: str | None = None
+    description: str | None = None,
 ) -> int:
     """Create a new CRM lead/opportunity."""
     vals = {
         "name": name,
-        "type": "opportunity"  # Typically we want to create opportunities straight away
+        "type": "opportunity",  # Typically we want to create opportunities straight away
     }
 
     if partner_id:

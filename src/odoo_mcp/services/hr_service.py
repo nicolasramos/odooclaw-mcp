@@ -119,9 +119,7 @@ def log_task_timesheet(
     if not client.model_exists("project.task", sender_id=sender_id):
         raise ValueError("Model project.task is not available in this Odoo instance")
     if not client.model_exists("account.analytic.line", sender_id=sender_id):
-        raise ValueError(
-            "Model account.analytic.line is not available in this Odoo instance"
-        )
+        raise ValueError("Model account.analytic.line is not available in this Odoo instance")
 
     tasks = client.call_kw(
         "project.task",
@@ -146,9 +144,7 @@ def log_task_timesheet(
         "date": date or date_cls.today().isoformat(),
     }
 
-    resolved_employee_id = _resolve_employee_id(
-        client, sender_id, employee_id=employee_id
-    )
+    resolved_employee_id = _resolve_employee_id(client, sender_id, employee_id=employee_id)
     if resolved_employee_id:
         vals["employee_id"] = resolved_employee_id
 

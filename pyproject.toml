@@ -61,19 +61,8 @@ include = ["odoo_mcp*"]
 [tool.black]
 line-length = 100
 target-version = ["py311"]
-include = '\\.pyi?$'
-extend-exclude = '''
-/(
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
+include = '\.pyi?$'
+extend-exclude = '/(\.eggs|\.git|\.hg|\.mypy_cache|\.tox|\.venv|build|dist)/'
 
 [tool.ruff]
 line-length = 100

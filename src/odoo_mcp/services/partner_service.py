@@ -1,18 +1,17 @@
-from typing import Optional
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
 
 _logger = get_logger("partner_service")
 
 
-def _normalize_partner_name(name: Optional[str]) -> Optional[str]:
+def _normalize_partner_name(name: str | None) -> str | None:
     if not name:
         return None
     normalized = " ".join(name.split())
     return normalized or None
 
 
-def _search_partner_id(client: OdooClient, user_id: int, domain: list) -> Optional[int]:
+def _search_partner_id(client: OdooClient, user_id: int, domain: list) -> int | None:
     partners = client.call_kw(
         "res.partner",
         "search_read",
@@ -28,11 +27,11 @@ def _search_partner_id(client: OdooClient, user_id: int, domain: list) -> Option
 def find_existing_partner_id(
     client: OdooClient,
     user_id: int,
-    name: Optional[str] = None,
-    vat: Optional[str] = None,
-    email: Optional[str] = None,
+    name: str | None = None,
+    vat: str | None = None,
+    email: str | None = None,
     allow_fuzzy_name: bool = False,
-) -> Optional[int]:
+) -> int | None:
     normalized_name = _normalize_partner_name(name)
 
     if vat:
@@ -50,9 +49,7 @@ def find_existing_partner_id(
         # ILIKE without surrounding wildcards): "Acme SL" matches "acme sl",
         # but NOT "Acme SL Holdings". Deliberately not accent-folding, to avoid
         # colliding distinct partners ("César" vs "Cesar" stay separate).
-        partner_id = _search_partner_id(
-            client, user_id, [("name", "=ilike", normalized_name)]
-        )
+        partner_id = _search_partner_id(client, user_id, [("name", "=ilike", normalized_name)])
         if partner_id:
             return partner_id
 
@@ -66,9 +63,9 @@ def find_partner(
     client: OdooClient,
     user_id: int,
     name: str,
-    vat: Optional[str] = None,
-    email: Optional[str] = None,
-) -> Optional[int]:
+    vat: str | None = None,
+    email: str | None = None,
+) -> int | None:
     partner_id = find_existing_partner_id(
         client,
         user_id,
@@ -86,8 +83,8 @@ def find_or_create_partner(
     client: OdooClient,
     user_id: int,
     name: str,
-    vat: Optional[str] = None,
-    email: Optional[str] = None,
+    vat: str | None = None,
+    email: str | None = None,
 ) -> int:
     partner_id = find_existing_partner_id(
         client,
@@ -128,9 +125,7 @@ def get_partner_summary(client: OdooClient, user_id: int, partner_id: int) -> di
     so_count = client.call_kw(
         "sale.order",
         "search_count",
-        args=[
-            [("partner_id", "=", partner_id), ("state", "not in", ["cancel", "done"])]
-        ],
+        args=[[("partner_id", "=", partner_id), ("state", "not in", ["cancel", "done"])]],
         sender_id=user_id,
     )
     inv_count = client.call_kw(

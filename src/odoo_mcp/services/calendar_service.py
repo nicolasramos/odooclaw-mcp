@@ -4,6 +4,7 @@ from odoo_mcp.core.client import OdooClient
 
 _logger = logging.getLogger(__name__)
 
+
 def create_calendar_event(
     client: OdooClient,
     sender_id: int,
@@ -12,7 +13,7 @@ def create_calendar_event(
     stop: str,
     partner_ids: list[int] | None = None,
     allday: bool = False,
-    description: str | None = None
+    description: str | None = None,
 ) -> int:
     """Create a new calendar event (appointment) in Odoo."""
     vals = {

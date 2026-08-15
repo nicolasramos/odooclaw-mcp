@@ -34,8 +34,13 @@ def create_vendor_invoice(
     )
 
 
-def find_pending_invoices(client: OdooClient, user_id: int, partner_id: int = None,
-                          move_type: str = "out_invoice", limit: int = 50) -> list:
+def find_pending_invoices(
+    client: OdooClient,
+    user_id: int,
+    partner_id: int = None,
+    move_type: str = "out_invoice",
+    limit: int = 50,
+) -> list:
     """
     Find invoices pending payment in Odoo 18.
 
@@ -63,30 +68,56 @@ def find_pending_invoices(client: OdooClient, user_id: int, partner_id: int = No
     if partner_id:
         domain.append(["partner_id", "=", partner_id])
 
-    fields = ["id", "name", "partner_id", "invoice_date", "invoice_date_due",
-              "amount_total", "amount_residual", "payment_state", "state", "move_type", "ref"]
+    fields = [
+        "id",
+        "name",
+        "partner_id",
+        "invoice_date",
+        "invoice_date_due",
+        "amount_total",
+        "amount_residual",
+        "payment_state",
+        "state",
+        "move_type",
+        "ref",
+    ]
 
     _logger.info(f"Finding pending invoices: move_type={move_type}, partner_id={partner_id}")
     return client.call_kw(
-        "account.move", "search_read",
+        "account.move",
+        "search_read",
         args=[domain],
         kwargs={"fields": fields, "limit": limit, "order": "invoice_date_due asc"},
-        sender_id=user_id
+        sender_id=user_id,
     )
 
 
 def get_invoice_summary(client: OdooClient, user_id: int, move_id: int) -> dict:
     """Get a complete summary of a specific invoice (account.move)."""
-    fields = ["id", "name", "move_type", "state", "payment_state",
-              "partner_id", "invoice_date", "invoice_date_due",
-              "amount_untaxed", "amount_tax", "amount_total", "amount_residual",
-              "ref", "invoice_line_ids", "currency_id"]
+    fields = [
+        "id",
+        "name",
+        "move_type",
+        "state",
+        "payment_state",
+        "partner_id",
+        "invoice_date",
+        "invoice_date_due",
+        "amount_untaxed",
+        "amount_tax",
+        "amount_total",
+        "amount_residual",
+        "ref",
+        "invoice_line_ids",
+        "currency_id",
+    ]
 
     records = client.call_kw(
-        "account.move", "search_read",
+        "account.move",
+        "search_read",
         args=[[["id", "=", move_id]]],
         kwargs={"fields": fields, "limit": 1},
-        sender_id=user_id
+        sender_id=user_id,
     )
 
     if not records:
@@ -97,10 +128,11 @@ def get_invoice_summary(client: OdooClient, user_id: int, move_id: int) -> dict:
     # Fetch invoice lines
     if invoice.get("invoice_line_ids"):
         lines = client.call_kw(
-            "account.move.line", "search_read",
+            "account.move.line",
+            "search_read",
             args=[[["move_id", "=", move_id], ["display_type", "=", "product"]]],
             kwargs={"fields": ["name", "quantity", "price_unit", "price_subtotal", "tax_ids"]},
-            sender_id=user_id
+            sender_id=user_id,
         )
         invoice["lines"] = lines
 
@@ -108,7 +140,12 @@ def get_invoice_summary(client: OdooClient, user_id: int, move_id: int) -> dict:
 
 
 def register_payment(
-    client, sender_id: int, invoice_id: int, amount: float, payment_date: str = None, journal_id: int = None
+    client,
+    sender_id: int,
+    invoice_id: int,
+    amount: float,
+    payment_date: str = None,
+    journal_id: int = None,
 ) -> bool:
     """Register a payment for an invoice via the account.payment.register wizard."""
     vals = {
@@ -118,27 +155,24 @@ def register_payment(
         vals["payment_date"] = payment_date
     if journal_id:
         vals["journal_id"] = journal_id
-        
-    context = {
-        "active_model": "account.move",
-        "active_ids": [invoice_id]
-    }
-    
+
+    context = {"active_model": "account.move", "active_ids": [invoice_id]}
+
     try:
         payment_wizard_id = client.call_kw(
             "account.payment.register",
             "create",
             args=[vals],
             kwargs={"context": context},
-            sender_id=sender_id
+            sender_id=sender_id,
         )
-        
+
         client.call_kw(
             "account.payment.register",
             "action_create_payments",
             args=[[payment_wizard_id]],
             kwargs={"context": context},
-            sender_id=sender_id
+            sender_id=sender_id,
         )
         return True
     except Exception as e:

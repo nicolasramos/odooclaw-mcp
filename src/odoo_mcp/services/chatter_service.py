@@ -121,9 +121,7 @@ def create_activity_summary(
             ["mail.activity"],
         )
 
-    activity_id = create_activity(
-        client, user_id, model, res_id, summary, note, assign_to
-    )
+    activity_id = create_activity(client, user_id, model, res_id, summary, note, assign_to)
     activity = client.call_kw(
         "mail.activity",
         "read",
