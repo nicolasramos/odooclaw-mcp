@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Version bumped from 2.2.0 → 2.3.0 (pyproject.toml, server.json).
-- Tool count: 85 → 124 MCP tools.
+- Tool count: 85 → 129 MCP tools.
 - README.md updated to reflect new tool count and scope.
 
 ## [2.2.0] - 2026-04-12

@@ -109,7 +109,7 @@ If `payload` is omitted, validation fails with an error equivalent to
 
 ## Scope
 
-- 124 MCP tools for Odoo operations (CRUD + business actions + migration workflows)
+- 129 MCP tools for Odoo operations (CRUD + business actions + migration workflows)
 - Pydantic validation for all tool payloads
 - Odoo 18 compatibility helpers (customer_rank / supplier_rank / payment_state)
 - Security guards (model allowlist, denylisted fields, action guard, unlink blocked)
@@ -117,7 +117,7 @@ If `payload` is omitted, validation fails with an error equivalent to
 
 ## Available Tools
 
-The server currently exposes **124 MCP tools**.
+The server currently exposes **129 MCP tools**.
 
 > Note: the grouped tables below focus on common/high-value tools. Use MCP
 > `list_tools` to inspect the full live tool catalog for your installed version.
