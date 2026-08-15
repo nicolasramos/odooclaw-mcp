@@ -8,16 +8,14 @@ from odoo_mcp.observability.logging import get_logger
 _logger = get_logger("workforce_service")
 
 
-def _resolve_employee_id(
-    client: OdooClient, sender_id: int, employee_id: int | None = None
-) -> int | None:
+def _resolve_employee_id(client: OdooClient, sender_id: int, employee_id: int | None = None) -> Any:
     if employee_id:
         return employee_id
 
     employees = client.call_kw(
         "hr.employee",
         "search_read",
-        args=[[('user_id', '=', sender_id)]],
+        args=[[("user_id", "=", sender_id)]],
         kwargs={"fields": ["id"], "limit": 1},
         sender_id=sender_id,
     )
@@ -36,8 +34,9 @@ def _attendance_hours_by_day(attendances: list[dict[str, Any]]) -> dict[str, flo
     for row in attendances:
         check_in = str(row.get("check_in") or "")
         day = check_in[:10]
-        if day:
-            out[day] = out.get(day, 0.0) + float(row.get("worked_hours") or 0.0)
+        if not day:
+            continue
+        out[day] = out.get(day, 0.0) + float(row.get("worked_hours") or 0.0)
     return out
 
 
@@ -45,8 +44,9 @@ def _timesheet_hours_by_day(timesheets: list[dict[str, Any]]) -> dict[str, float
     out: dict[str, float] = {}
     for row in timesheets:
         day = str(row.get("date") or "")
-        if day:
-            out[day] = out.get(day, 0.0) + float(row.get("unit_amount") or 0.0)
+        if not day:
+            continue
+        out[day] = out.get(day, 0.0) + float(row.get("unit_amount") or 0.0)
     return out
 
 
@@ -66,7 +66,7 @@ def check_in(
     open_rows = client.call_kw(
         "hr.attendance",
         "search_read",
-        args=[[('employee_id', '=', resolved_employee), ('check_out', '=', False)]],
+        args=[[("employee_id", "=", resolved_employee), ("check_out", "=", False)]],
         kwargs={"fields": ["id", "check_in"], "limit": 1, "order": "check_in desc"},
         sender_id=sender_id,
     )
@@ -83,9 +83,7 @@ def check_in(
         "employee_id": resolved_employee,
         "check_in": check_in_at or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
     }
-    attendance_id = client.call_kw(
-        "hr.attendance", "create", args=[vals], sender_id=sender_id
-    )
+    attendance_id = client.call_kw("hr.attendance", "create", args=[vals], sender_id=sender_id)
     return {
         "ok": True,
         "status": "checked_in",
@@ -110,7 +108,7 @@ def check_out(
     open_rows = client.call_kw(
         "hr.attendance",
         "search_read",
-        args=[[('employee_id', '=', resolved_employee), ('check_out', '=', False)]],
+        args=[[("employee_id", "=", resolved_employee), ("check_out", "=", False)]],
         kwargs={
             "fields": ["id", "check_in", "worked_hours"],
             "limit": 1,
@@ -119,13 +117,20 @@ def check_out(
         sender_id=sender_id,
     )
     if not open_rows:
-        return {"ok": True, "status": "not_checked_in", "employee_id": resolved_employee}
+        return {
+            "ok": True,
+            "status": "not_checked_in",
+            "employee_id": resolved_employee,
+        }
 
     attendance_id = open_rows[0].get("id")
     client.call_kw(
         "hr.attendance",
         "write",
-        args=[[attendance_id], {"check_out": check_out_at or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")}],
+        args=[
+            [attendance_id],
+            {"check_out": check_out_at or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")},
+        ],
         sender_id=sender_id,
     )
 
@@ -161,15 +166,27 @@ def get_my_today_summary(
         attendance_rows = client.call_kw(
             "hr.attendance",
             "search_read",
-            args=[[("employee_id", "=", resolved_employee), ("check_in", ">=", start_ts), ("check_in", "<=", end_ts)]],
-            kwargs={"fields": ["id", "check_in", "check_out", "worked_hours"], "limit": 100},
+            args=[
+                [
+                    ("employee_id", "=", resolved_employee),
+                    ("check_in", ">=", start_ts),
+                    ("check_in", "<=", end_ts),
+                ]
+            ],
+            kwargs={
+                "fields": ["id", "check_in", "check_out", "worked_hours"],
+                "limit": 100,
+            },
             sender_id=sender_id,
         )
 
     timesheet_rows: list[dict[str, Any]] = []
     if client.model_exists("account.analytic.line", sender_id=sender_id):
         ts_domain: list[tuple[str, str, Any]] = [("date", "=", today)]
-        ts_domain.append(("employee_id", "=", resolved_employee) if resolved_employee else ("user_id", "=", sender_id))
+        if resolved_employee:
+            ts_domain.append(("employee_id", "=", resolved_employee))
+        else:
+            ts_domain.append(("user_id", "=", sender_id))
         timesheet_rows = client.call_kw(
             "account.analytic.line",
             "search_read",
@@ -183,7 +200,7 @@ def get_my_today_summary(
         task_open_count = client.call_kw(
             "project.task",
             "search_count",
-            args=[[('user_ids', 'in', [sender_id]), ('stage_id.fold', '=', False)]],
+            args=[[("user_ids", "in", [sender_id]), ("stage_id.fold", "=", False)]],
             sender_id=sender_id,
         )
 
@@ -192,7 +209,12 @@ def get_my_today_summary(
         pending_expense_count = client.call_kw(
             "hr.expense",
             "search_count",
-            args=[[('employee_id', '=', resolved_employee), ('state', 'not in', ['done', 'refused'])]],
+            args=[
+                [
+                    ("employee_id", "=", resolved_employee),
+                    ("state", "not in", ["done", "refused"]),
+                ]
+            ],
             sender_id=sender_id,
         )
 
@@ -200,9 +222,13 @@ def get_my_today_summary(
         "date": today,
         "employee_id": resolved_employee,
         "attendance_count": len(attendance_rows),
-        "attendance_hours": round(sum(float(r.get("worked_hours") or 0.0) for r in attendance_rows), 2),
+        "attendance_hours": round(
+            sum(float(r.get("worked_hours") or 0.0) for r in attendance_rows), 2
+        ),
         "timesheet_count": len(timesheet_rows),
-        "timesheet_hours": round(sum(float(r.get("unit_amount") or 0.0) for r in timesheet_rows), 2),
+        "timesheet_hours": round(
+            sum(float(r.get("unit_amount") or 0.0) for r in timesheet_rows), 2
+        ),
         "open_tasks_count": int(task_open_count or 0),
         "pending_expenses_count": int(pending_expense_count or 0),
     }
@@ -231,32 +257,48 @@ def find_missing_timesheets(
     attendance_rows = client.call_kw(
         "hr.attendance",
         "search_read",
-        args=[[('employee_id', '=', resolved_employee), ('check_in', '>=', f"{start_day} 00:00:00"), ('check_in', '<=', f"{end_day} 23:59:59")]],
+        args=[
+            [
+                ("employee_id", "=", resolved_employee),
+                ("check_in", ">=", f"{start_day} 00:00:00"),
+                ("check_in", "<=", f"{end_day} 23:59:59"),
+            ]
+        ],
         kwargs={"fields": ["id", "check_in", "worked_hours"], "limit": 1000},
         sender_id=sender_id,
     )
     timesheet_rows = client.call_kw(
         "account.analytic.line",
         "search_read",
-        args=[[('employee_id', '=', resolved_employee), ('date', '>=', start_day), ('date', '<=', end_day)]],
+        args=[
+            [
+                ("employee_id", "=", resolved_employee),
+                ("date", ">=", start_day),
+                ("date", "<=", end_day),
+            ]
+        ],
         kwargs={"fields": ["id", "date", "unit_amount"], "limit": 2000},
         sender_id=sender_id,
     )
 
     attendance_by_day = _attendance_hours_by_day(attendance_rows)
     timesheet_by_day = _timesheet_hours_by_day(timesheet_rows)
+
     missing_days: list[dict[str, Any]] = []
     for day in sorted(attendance_by_day.keys()):
         attended = round(float(attendance_by_day.get(day) or 0.0), 2)
         logged = round(float(timesheet_by_day.get(day) or 0.0), 2)
         missing = round(attended - logged, 2)
         if missing > tolerance_hours:
-            missing_days.append({
-                "date": day,
-                "attendance_hours": attended,
-                "timesheet_hours": logged,
-                "missing_hours": missing,
-            })
+            missing_days.append(
+                {
+                    "date": day,
+                    "attendance_hours": attended,
+                    "timesheet_hours": logged,
+                    "missing_hours": missing,
+                }
+            )
+
     return missing_days
 
 
@@ -282,7 +324,7 @@ def suggest_timesheet_from_attendance(
         rows = client.call_kw(
             "project.task",
             "search_read",
-            args=[[('user_ids', 'in', [sender_id]), ('stage_id.fold', '=', False)]],
+            args=[[("user_ids", "in", [sender_id]), ("stage_id.fold", "=", False)]],
             kwargs={"fields": ["id", "name"], "limit": 1, "order": "write_date desc"},
             sender_id=sender_id,
         )
@@ -301,7 +343,11 @@ def suggest_timesheet_from_attendance(
             suggestion["task_name"] = suggested_task.get("name")
         suggestions.append(suggestion)
 
-    return {"missing_days": len(missing), "suggestions": suggestions, "suggested_task": suggested_task}
+    return {
+        "missing_days": len(missing),
+        "suggestions": suggestions,
+        "suggested_task": suggested_task,
+    }
 
 
 def create_expense_report(
@@ -386,7 +432,12 @@ def submit_expense_report(client: OdooClient, sender_id: int, sheet_id: int) -> 
                 sender_id=sender_id,
             )
             state = state_row[0].get("state") if state_row else None
-            return {"ok": True, "sheet_id": sheet_id, "state": state, "method": method}
+            return {
+                "ok": True,
+                "sheet_id": sheet_id,
+                "state": state,
+                "method": method,
+            }
         except Exception as exc:
             last_error = str(exc)
             continue
@@ -406,17 +457,32 @@ def approve_expense(
     if not client.model_exists("hr.expense.sheet", sender_id=sender_id):
         raise ValueError("Model hr.expense.sheet is not available in this Odoo instance")
 
-    methods = (
-        ["action_approve_expense_sheets", "approve_expense_sheets", "action_approve_sheet", "action_approve"]
-        if approve
-        else ["action_refuse_sheet", "action_refuse_expense_sheets", "action_refuse"]
-    )
-    kwargs = {} if approve else ({"reason": reason} if reason else {})
+    if approve:
+        methods = [
+            "action_approve_expense_sheets",
+            "approve_expense_sheets",
+            "action_approve_sheet",
+            "action_approve",
+        ]
+        kwargs = {}
+    else:
+        methods = [
+            "action_refuse_sheet",
+            "action_refuse_expense_sheets",
+            "action_refuse",
+        ]
+        kwargs = {"reason": reason} if reason else {}
 
     last_error = None
     for method in methods:
         try:
-            client.call_kw("hr.expense.sheet", method, args=[[sheet_id]], kwargs=kwargs, sender_id=sender_id)
+            client.call_kw(
+                "hr.expense.sheet",
+                method,
+                args=[[sheet_id]],
+                kwargs=kwargs,
+                sender_id=sender_id,
+            )
             state_row = client.call_kw(
                 "hr.expense.sheet",
                 "read",
@@ -458,17 +524,19 @@ def notify_pending_actions(
         open_att = client.call_kw(
             "hr.attendance",
             "search_read",
-            args=[[('employee_id', '=', resolved_employee), ('check_out', '=', False)]],
+            args=[[("employee_id", "=", resolved_employee), ("check_out", "=", False)]],
             kwargs={"fields": ["id", "check_in"], "limit": 1, "order": "check_in desc"},
             sender_id=sender_id,
         )
         if open_att:
-            alerts.append({
-                "type": "attendance_open",
-                "severity": "high",
-                "message": "You are checked in but not checked out.",
-                "attendance_id": open_att[0].get("id"),
-            })
+            alerts.append(
+                {
+                    "type": "attendance_open",
+                    "severity": "high",
+                    "message": "You are checked in but not checked out.",
+                    "attendance_id": open_att[0].get("id"),
+                }
+            )
 
     if resolved_employee and client.model_exists("account.analytic.line", sender_id=sender_id):
         missing = find_missing_timesheets(
@@ -481,43 +549,49 @@ def notify_pending_actions(
         )
         if missing:
             total_missing = round(sum(float(row["missing_hours"]) for row in missing), 2)
-            alerts.append({
-                "type": "missing_timesheets",
-                "severity": "medium",
-                "message": f"You have {len(missing)} day(s) with missing timesheets.",
-                "missing_days": len(missing),
-                "missing_hours": total_missing,
-            })
+            alerts.append(
+                {
+                    "type": "missing_timesheets",
+                    "severity": "medium",
+                    "message": f"You have {len(missing)} day(s) with missing timesheets.",
+                    "missing_days": len(missing),
+                    "missing_hours": total_missing,
+                }
+            )
 
     if resolved_employee and client.model_exists("hr.expense", sender_id=sender_id):
         draft_expenses = client.call_kw(
             "hr.expense",
             "search_count",
-            args=[[('employee_id', '=', resolved_employee), ('state', '=', 'draft')]],
+            args=[[("employee_id", "=", resolved_employee), ("state", "=", "draft")]],
             sender_id=sender_id,
         )
         if draft_expenses:
-            alerts.append({
-                "type": "draft_expenses",
-                "severity": "low",
-                "message": f"You have {draft_expenses} draft expense(s) pending report submission.",
-                "count": int(draft_expenses),
-            })
+            alerts.append(
+                {
+                    "type": "draft_expenses",
+                    "severity": "low",
+                    "message": f"You have {draft_expenses} draft expense(s) pending report submission.",
+                    "count": int(draft_expenses),
+                }
+            )
 
     if client.model_exists("hr.expense.sheet", sender_id=sender_id):
         pending_approval = client.call_kw(
             "hr.expense.sheet",
             "search_count",
-            args=[[('state', 'in', ['submit', 'reported'])]],
+            args=[[("state", "in", ["submit", "reported"])]],
             sender_id=sender_id,
         )
         if pending_approval:
-            alerts.append({
-                "type": "expense_approvals",
-                "severity": "low",
-                "message": f"There are {pending_approval} expense report(s) pending approval.",
-                "count": int(pending_approval),
-            })
+            alerts.append(
+                {
+                    "type": "expense_approvals",
+                    "severity": "low",
+                    "message": f"There are {pending_approval} expense report(s) pending approval.",
+                    "count": int(pending_approval),
+                }
+            )
 
     _logger.info("Generated %s pending action alerts", len(alerts))
     return {"ok": True, "days_back": days_back, "alerts": alerts}

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-08-14
+
+### Added
+- Initial sync from OdooClaw (NRA-470): ported 43 new tools covering inventory, logistics, and purchasing domains.
+- Inventory tools: `odoo_find_product`, `odoo_get_stock_availability`, `odoo_get_product_summary`, `odoo_get_product_supplier_info`, `odoo_get_stock_moves`, `odoo_find_stock_locations`, `odoo_explain_stock_forecast`, `odoo_get_location_stock_summary`, `odoo_get_lot_traceability`, `odoo_check_lot_requirements`, `odoo_apply_inventory_adjustment`, `odoo_find_inventory_discrepancies`, `odoo_find_lot_serial`, `odoo_get_replenishment_suggestions`, `odoo_validate_receipt`, `odoo_prepare_receipt_validation`.
+- Logistics tools: `odoo_find_sale_deliveries`, `odoo_get_delivery_summary`, `odoo_match_delivery_to_sale_order`, `odoo_find_internal_transfers`, `odoo_prepare_internal_transfer`, `odoo_create_internal_transfer`, `odoo_get_transfer_summary`, `odoo_prepare_transfer_validation`, `odoo_validate_transfer`, `odoo_get_logistics_capabilities`.
+- Purchase tools: `odoo_find_purchase_order`, `odoo_get_purchase_order_summary`, `odoo_get_purchase_receipt_status`, `odoo_get_purchase_invoice_status`, `odoo_find_purchase_receipts`, `odoo_suggest_vendor_products`, `odoo_match_vendor_bill_to_purchase_order`.
+- Updated service files: `inventory_service.py` (2366 lines), `purchase_service.py` (613 lines), plus updated `accounting`, `project`, `partner`, `chatter` services.
+- Updated schema layer: 40 new Pydantic schemas in `schemas/business.py` for inventory, logistics, and purchasing domains.
+- Updated server imports: full parenthesized import list for `inventory_service` (37 functions).
+
+### Changed
+- Version bumped from 2.2.0 → 2.3.0 (pyproject.toml, server.json).
+- Tool count: 85 → 129 MCP tools.
+- README.md updated to reflect new tool count and scope.
+
 ## [2.2.0] - 2026-04-12
 
 ### Added

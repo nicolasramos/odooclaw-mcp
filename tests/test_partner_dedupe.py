@@ -22,7 +22,7 @@ def test_find_partner_returns_existing_id_without_create(mock_client):
     mock_client.call_kw.assert_called_once_with(
         "res.partner",
         "search_read",
-        args=[[("name", "=", "Julio Iglesias")]],
+        args=[[("name", "=ilike", "Julio Iglesias")]],
         kwargs={"fields": ["id", "name", "email", "vat"], "limit": 1},
         sender_id=7,
     )
@@ -39,7 +39,7 @@ def test_find_partner_falls_back_to_fuzzy_name(mock_client):
             call(
                 "res.partner",
                 "search_read",
-                args=[[("name", "=", "Julio Iglesias")]],
+                args=[[("name", "=ilike", "Julio Iglesias")]],
                 kwargs={"fields": ["id", "name", "email", "vat"], "limit": 1},
                 sender_id=7,
             ),
@@ -71,7 +71,11 @@ def test_find_or_create_partner_reuses_exact_match(mock_client):
 
 
 def test_odoo_create_partner_reuses_existing_exact_match(mock_client):
-    mock_client.call_kw.return_value = [{"id": 179, "name": "Julio Iglesias"}]
+    # guard_model_access -> ir.model allowlist, then find_existing_partner_id -> search_read
+    mock_client.call_kw.side_effect = [
+        [{"model": "res.partner"}],  # ir.model allowlist
+        [{"id": 179, "name": "Julio Iglesias"}],  # search_read
+    ]
 
     partner_id = odoo_create(
         mock_client,
@@ -81,12 +85,23 @@ def test_odoo_create_partner_reuses_existing_exact_match(mock_client):
     )
 
     assert partner_id == 179
-    mock_client.call_kw.assert_called_once_with(
-        "res.partner",
-        "search_read",
-        args=[[("name", "=", "Julio Iglesias")]],
-        kwargs={"fields": ["id", "name", "email", "vat"], "limit": 1},
-        sender_id=5,
+    mock_client.call_kw.assert_has_calls(
+        [
+            call(
+                "ir.model",
+                "search_read",
+                args=[["transient", "=", False]],
+                kwargs={"fields": ["model"]},
+                sender_id=5,
+            ),
+            call(
+                "res.partner",
+                "search_read",
+                args=[[("name", "=ilike", "Julio Iglesias")]],
+                kwargs={"fields": ["id", "name", "email", "vat"], "limit": 1},
+                sender_id=5,
+            ),
+        ]
     )
 
 
@@ -106,7 +121,7 @@ def test_odoo_create_partner_creates_when_no_match(mock_client):
             call(
                 "res.partner",
                 "search_read",
-                args=[[("name", "=", "Julio Iglesias")]],
+                args=[[("name", "=ilike", "Julio Iglesias")]],
                 kwargs={"fields": ["id", "name", "email", "vat"], "limit": 1},
                 sender_id=5,
             ),
@@ -114,6 +129,7 @@ def test_odoo_create_partner_creates_when_no_match(mock_client):
                 "res.partner",
                 "create",
                 args=[{"name": "Julio Iglesias"}],
+                sender_id=5,
             ),
         ]
     )

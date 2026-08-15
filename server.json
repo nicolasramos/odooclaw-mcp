@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.nicolasramos/odooclaw-mcp",
-  "description": "MCP server for Odoo 18 with 85 business tools",
+  "description": "MCP server for Odoo 18 with 129 business tools",
   "repository": {
     "url": "https://github.com/nicolasramos/odooclaw-mcp.git",
     "source": "github"
   },
-  "version": "2.2.0",
+  "version": "2.3.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "odooclaw-mcp",
-      "version": "2.2.0",
+      "version": "2.3.0",
       "runtimeHint": "python",
       "transport": {
         "type": "stdio"

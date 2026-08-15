@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
 from odoo_mcp.schemas.business import (
     CreateActivitySchema,
     FindSaleOrderSchema,
@@ -26,11 +26,14 @@ from odoo_mcp.server import (
 # Mute logger info noise so we only see our test output
 logging.getLogger("server").setLevel(logging.CRITICAL)
 
+
 def print_ok(name, info=""):
     print(f"\033[92m🟢 [PASS]\033[0m {name.ljust(45)} {info}")
 
+
 def print_fail(name, error=""):
     print(f"\033[91m🔴 [FAIL]\033[0m {name.ljust(45)} {error}")
+
 
 def run_tests():
     print("\n🚀 QA Runbook E2E - Odoo MCP 🚀\n")
@@ -65,14 +68,20 @@ def run_tests():
 
     # Crear Actividad
     try:
-        act_id = odoo_create_activity(CreateActivitySchema(model="res.partner", res_id=partner_id, summary="Prueba E2E", sender_id=uid))
+        act_id = odoo_create_activity(
+            CreateActivitySchema(
+                model="res.partner", res_id=partner_id, summary="Prueba E2E", sender_id=uid
+            )
+        )
         print_ok("3.2 Crear Actividad", f"Creada con ID {act_id}")
     except Exception as e:
         print_fail("3.2 Crear Actividad", str(e))
 
     # Listar Actividades
     try:
-        acts = odoo_list_pending_activities(ListPendingActivitiesSchema(model="res.partner", sender_id=uid))
+        acts = odoo_list_pending_activities(
+            ListPendingActivitiesSchema(model="res.partner", sender_id=uid)
+        )
         print_ok("3.3 Listar Actividades Pts", f"Recuperadas: {len(acts)}")
     except Exception as e:
         print_fail("3.3 Listar Actividades Pts", str(e))
@@ -107,7 +116,8 @@ def run_tests():
     except Exception as e:
         print_ok("4.5 Sele Order Inexistente", f"Rechazado correctamente: {str(e)[:50]}")
 
+
 print("Inicializando entorno Odoo y dependencias para pruebas E2E...")
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_tests()
     print("\n🏁 Primera batería completada. Revisa los resultados y serializers. 🏁\n")

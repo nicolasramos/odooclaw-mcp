@@ -1,3 +1,4 @@
+from typing import Any
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
@@ -9,8 +10,8 @@ from odoo_mcp.services.capability_service import (
 _logger = get_logger("helpdesk_service")
 
 
-def _helpdesk_fields(client: OdooClient, user_id: int) -> dict | None:
-    return client.try_get_model_fields("helpdesk.ticket")
+def _helpdesk_fields(client: OdooClient, user_id: int) -> Any:
+    return client.try_get_model_fields("helpdesk.ticket", sender_id=user_id)
 
 
 def _ticket_values(
@@ -22,7 +23,7 @@ def _ticket_values(
     team_id: int | None = None,
     priority: str | None = None,
 ) -> dict:
-    values = {"name": name}
+    values: dict[str, Any] = {"name": name}
     if description and "description" in fields:
         values["description"] = description
     if description and "ticket_description" in fields and "description" not in values:
@@ -69,9 +70,7 @@ def create_helpdesk_ticket(
         priority=priority,
     )
     _logger.info(f"Creating helpdesk ticket: {name}")
-    ticket_id = client.call_kw(
-        "helpdesk.ticket", "create", args=[values]
-    )
+    ticket_id = client.call_kw("helpdesk.ticket", "create", args=[values], sender_id=user_id)
     return build_success_response(
         "helpdesk.create_ticket",
         ticket_id=ticket_id,
@@ -133,9 +132,7 @@ def draft_ticket_email(
     email_to: str | None = None,
 ) -> dict:
     helpdesk_fields = _helpdesk_fields(client, user_id)
-    compose_fields = client.try_get_model_fields(
-        "mail.compose.message"
-    )
+    compose_fields = client.try_get_model_fields("mail.compose.message", sender_id=user_id)
     if not helpdesk_fields or not compose_fields:
         return build_unsupported_response(
             "helpdesk.draft_ticket_email",
@@ -182,6 +179,7 @@ def draft_ticket_email(
                 partner_email = partner[0].get("email")
 
     draft_payload = {
+        "ticket_id": ticket_id,
         "model": "helpdesk.ticket",
         "res_id": ticket_id,
         "subject": subject,
