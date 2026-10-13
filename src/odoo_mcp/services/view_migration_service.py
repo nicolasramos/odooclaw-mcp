@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import difflib
+import json
 import re
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
@@ -31,7 +32,7 @@ def _resolve_xmlid(
     sender_id: int,
     xmlid: str,
     expected_model: str | None = None,
-) -> dict[str, Any] | None:
+) -> Any:
     parsed = _parse_xmlid(xmlid)
     if not parsed:
         return None
@@ -110,9 +111,7 @@ def _scan_arch_migration_issues(
         )
 
     if target_version.startswith(("17", "18")):
-        if re.search(r"\battrs\s*=", arch_text) or re.search(
-            r"\bstates\s*=", arch_text
-        ):
+        if re.search(r"\battrs\s*=", arch_text) or re.search(r"\bstates\s*=", arch_text):
             add_issue(
                 "ATTRS_STATES_LEGACY",
                 "high",
@@ -431,17 +430,11 @@ def find_views_by_model(
         "ir.ui.view",
         {"model": model, "view_type": view_type, "limit": limit, "count": len(rows)},
     )
-    return build_success_response(
-        "views.find_views_by_model", count=len(rows), views=rows
-    )
+    return build_success_response("views.find_views_by_model", count=len(rows), views=rows)
 
 
-def get_report_template(
-    client: OdooClient, sender_id: int, xmlid: str
-) -> dict[str, Any]:
-    xml_row = _resolve_xmlid(
-        client, sender_id, xmlid, expected_model="ir.actions.report"
-    )
+def get_report_template(client: OdooClient, sender_id: int, xmlid: str) -> dict[str, Any]:
+    xml_row = _resolve_xmlid(client, sender_id, xmlid, expected_model="ir.actions.report")
     if not xml_row:
         return {
             "ok": False,
@@ -509,19 +502,16 @@ def scan_view_migration_issues(
     client: OdooClient,
     sender_id: int,
     xmlid: str,
-    target_version: str,
+    target_version: str | None,
     rule_sets: list[str] | None = None,
 ) -> dict[str, Any]:
-    view_response = get_view_by_xmlid(
-        client, sender_id, xmlid, include_inherited_chain=False
-    )
+    target_version = target_version or "18.0"
+    view_response = get_view_by_xmlid(client, sender_id, xmlid, include_inherited_chain=False)
     if not view_response.get("ok"):
         return view_response
 
     arch_text = view_response["view"].get("arch_db") or ""
-    issues = _scan_arch_migration_issues(
-        arch_text, target_version=target_version, is_qweb=False
-    )
+    issues = _scan_arch_migration_issues(arch_text, target_version=target_version, is_qweb=False)
     summary = _issue_summary(issues)
     log_audit_event(
         "VIEW_SCAN",
@@ -545,18 +535,17 @@ def scan_report_migration_issues(
     client: OdooClient,
     sender_id: int,
     xmlid: str,
-    target_version: str,
+    target_version: str | None,
     rule_sets: list[str] | None = None,
 ) -> dict[str, Any]:
+    target_version = target_version or "18.0"
     report_response = get_report_template(client, sender_id, xmlid)
     if not report_response.get("ok"):
         return report_response
 
     template = report_response.get("template") or {}
     arch_text = template.get("arch_db") or ""
-    issues = _scan_arch_migration_issues(
-        arch_text, target_version=target_version, is_qweb=True
-    )
+    issues = _scan_arch_migration_issues(arch_text, target_version=target_version, is_qweb=True)
     summary = _issue_summary(issues)
     log_audit_event(
         "REPORT_SCAN",
@@ -580,9 +569,10 @@ def propose_view_patch(
     client: OdooClient,
     sender_id: int,
     xmlid: str,
-    intent: str,
-    constraints: dict[str, Any] | None = None,
+    intent: str | None,
+    constraints: Any = None,
 ) -> dict[str, Any]:
+    intent = intent or "migrate"
     scan = scan_view_migration_issues(client, sender_id, xmlid, target_version="18.0")
     if not scan.get("ok"):
         return scan
@@ -616,9 +606,10 @@ def propose_report_patch(
     client: OdooClient,
     sender_id: int,
     xmlid: str,
-    intent: str,
-    constraints: dict[str, Any] | None = None,
+    intent: str | None,
+    constraints: Any = None,
 ) -> dict[str, Any]:
+    intent = intent or "migrate"
     scan = scan_report_migration_issues(client, sender_id, xmlid, target_version="18.0")
     if not scan.get("ok"):
         return scan
@@ -652,10 +643,12 @@ def validate_view_patch(
     client: OdooClient,
     sender_id: int,
     base_view_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     strict: bool = True,
-    target_version: str = "18.0",
+    target_version: str | None = "18.0",
 ) -> dict[str, Any]:
+    target_version = target_version or "18.0"
+    patch = json.loads(patch) if isinstance(patch, str) else patch
     view_response = get_view_by_xmlid(
         client, sender_id, base_view_xmlid, include_inherited_chain=False
     )
@@ -693,25 +686,19 @@ def validate_view_patch(
         # advisory patch does not directly execute xpath mutations
         checks["xpath_matches"] = []
     else:
-        errors.append(
-            "Unsupported patch_format. Use xml_inheritance or advisory_patch."
-        )
+        errors.append("Unsupported patch_format. Use xml_inheritance or advisory_patch.")
 
     if re.search(r"<\s*record\b", str(patch)):
         checks["forbidden_patterns"].append("record_tag")
         errors.append("Patch must not include <record> declarations.")
 
     simulated_after = (
-        _apply_advisory_patch(base_arch, patch)
-        if patch_format == "advisory_patch"
-        else base_arch
+        _apply_advisory_patch(base_arch, patch) if patch_format == "advisory_patch" else base_arch
     )
     issues_after = _scan_arch_migration_issues(
         simulated_after, target_version=target_version, is_qweb=False
     )
-    checks["version_compatibility"] = (
-        len([i for i in issues_after if i["severity"] == "high"]) == 0
-    )
+    checks["version_compatibility"] = len([i for i in issues_after if i["severity"] == "high"]) == 0
     if not checks["version_compatibility"]:
         warnings.append("Patch still leaves high-severity migration issues.")
 
@@ -735,10 +722,12 @@ def validate_report_patch(
     client: OdooClient,
     sender_id: int,
     report_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     strict: bool = True,
-    target_version: str = "18.0",
+    target_version: str | None = "18.0",
 ) -> dict[str, Any]:
+    target_version = target_version or "18.0"
+    patch = json.loads(patch) if isinstance(patch, str) else patch
     report_response = get_report_template(client, sender_id, report_xmlid)
     if not report_response.get("ok"):
         return report_response
@@ -774,25 +763,19 @@ def validate_report_patch(
     elif patch_format == "advisory_patch":
         checks["xpath_matches"] = []
     else:
-        errors.append(
-            "Unsupported patch_format. Use xml_inheritance or advisory_patch."
-        )
+        errors.append("Unsupported patch_format. Use xml_inheritance or advisory_patch.")
 
     if re.search(r"\bt-raw\s*=", str(patch)):
         checks["forbidden_patterns"].append("t-raw")
         warnings.append("Patch includes t-raw usage. Review security implications.")
 
     simulated_after = (
-        _apply_advisory_patch(base_arch, patch)
-        if patch_format == "advisory_patch"
-        else base_arch
+        _apply_advisory_patch(base_arch, patch) if patch_format == "advisory_patch" else base_arch
     )
     issues_after = _scan_arch_migration_issues(
         simulated_after, target_version=target_version, is_qweb=True
     )
-    checks["version_compatibility"] = (
-        len([i for i in issues_after if i["severity"] == "high"]) == 0
-    )
+    checks["version_compatibility"] = len([i for i in issues_after if i["severity"] == "high"]) == 0
     if not checks["version_compatibility"]:
         warnings.append("Patch still leaves high-severity migration issues.")
 
@@ -816,9 +799,10 @@ def preview_view_patch(
     client: OdooClient,
     sender_id: int,
     base_view_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     diff_format: str = "unified",
 ) -> dict[str, Any]:
+    patch = json.loads(patch) if isinstance(patch, str) else patch
     view_response = get_view_by_xmlid(
         client, sender_id, base_view_xmlid, include_inherited_chain=False
     )
@@ -863,9 +847,7 @@ def test_view_compilation(
     view_xmlid: str,
     context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    view_response = get_view_by_xmlid(
-        client, sender_id, view_xmlid, include_inherited_chain=False
-    )
+    view_response = get_view_by_xmlid(client, sender_id, view_xmlid, include_inherited_chain=False)
     if not view_response.get("ok"):
         return view_response
 
@@ -919,7 +901,7 @@ def apply_view_patch_safe(
     client: OdooClient,
     sender_id: int,
     base_view_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     *,
     strict: bool = True,
     confirm: bool = False,
@@ -927,6 +909,7 @@ def apply_view_patch_safe(
     inherited_view_name: str | None = None,
     priority: int = 90,
 ) -> dict[str, Any]:
+    patch = json.loads(patch) if isinstance(patch, str) else patch
     view_response = get_view_by_xmlid(
         client, sender_id, base_view_xmlid, include_inherited_chain=False
     )
@@ -960,8 +943,7 @@ def apply_view_patch_safe(
         }
 
     create_vals = {
-        "name": inherited_view_name
-        or f"mcp.patch.{base_view.get('name') or base_view_xmlid}",
+        "name": inherited_view_name or f"mcp.patch.{base_view.get('name') or base_view_xmlid}",
         "type": base_view.get("type") or "form",
         "model": base_view.get("model"),
         "inherit_id": int(base_view.get("id")),
@@ -1052,7 +1034,7 @@ def apply_report_patch_safe(
     client: OdooClient,
     sender_id: int,
     report_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     *,
     strict: bool = True,
     confirm: bool = False,
@@ -1060,6 +1042,7 @@ def apply_report_patch_safe(
     inherited_view_name: str | None = None,
     priority: int = 90,
 ) -> dict[str, Any]:
+    patch = json.loads(patch) if isinstance(patch, str) else patch
     report_response = get_report_template(client, sender_id, report_xmlid)
     if not report_response.get("ok"):
         return report_response
@@ -1100,8 +1083,7 @@ def apply_report_patch_safe(
 
     report = report_response.get("report") or {}
     create_vals = {
-        "name": inherited_view_name
-        or f"mcp.patch.{report.get('name') or report_xmlid}",
+        "name": inherited_view_name or f"mcp.patch.{report.get('name') or report_xmlid}",
         "type": "qweb",
         "inherit_id": int(template.get("id")),
         "mode": "extension",
@@ -1256,9 +1238,10 @@ def preview_report_patch(
     client: OdooClient,
     sender_id: int,
     report_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     diff_format: str = "unified",
 ) -> dict[str, Any]:
+    patch = json.loads(patch) if isinstance(patch, str) else patch
     report_response = get_report_template(client, sender_id, report_xmlid)
     if not report_response.get("ok"):
         return report_response
@@ -1348,12 +1331,14 @@ def assist_view_migration(
     client: OdooClient,
     sender_id: int,
     xmlid: str,
-    target_version: str = "18.0",
-    intent: str = "migrate",
-    constraints: dict[str, Any] | None = None,
+    target_version: str | None = "18.0",
+    intent: str | None = "migrate",
+    constraints: Any = None,
     strict: bool = True,
     include_compile_test: bool = True,
 ) -> dict[str, Any]:
+    target_version = target_version or "18.0"
+    intent = intent or "migrate"
     scan = scan_view_migration_issues(
         client,
         sender_id,
@@ -1389,9 +1374,7 @@ def assist_view_migration(
         patch=patch,
     )
     compilation = (
-        test_view_compilation(client, sender_id, view_xmlid=xmlid)
-        if include_compile_test
-        else None
+        test_view_compilation(client, sender_id, view_xmlid=xmlid) if include_compile_test else None
     )
 
     risk_level = proposal.get("risk_level", "medium")
@@ -1430,11 +1413,13 @@ def assist_report_migration(
     client: OdooClient,
     sender_id: int,
     xmlid: str,
-    target_version: str = "18.0",
-    intent: str = "migrate",
-    constraints: dict[str, Any] | None = None,
+    target_version: str | None = "18.0",
+    intent: str | None = "migrate",
+    constraints: Any = None,
     strict: bool = True,
 ) -> dict[str, Any]:
+    target_version = target_version or "18.0"
+    intent = intent or "migrate"
     scan = scan_report_migration_issues(
         client,
         sender_id,
@@ -1537,7 +1522,7 @@ def visualize_view_patch(
     client: OdooClient,
     sender_id: int,
     base_view_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     diff_format: str = "unified",
 ) -> dict[str, Any]:
     preview = preview_view_patch(
@@ -1573,7 +1558,7 @@ def visualize_report_patch(
     client: OdooClient,
     sender_id: int,
     report_xmlid: str,
-    patch: dict[str, Any],
+    patch: str | dict[str, Any],
     diff_format: str = "unified",
 ) -> dict[str, Any]:
     preview = preview_report_patch(
@@ -1609,13 +1594,14 @@ def batch_assist_view_migration(
     client: OdooClient,
     sender_id: int,
     xmlids: list[str],
-    target_version: str = "18.0",
-    intent: str = "migrate",
-    constraints: dict[str, Any] | None = None,
+    target_version: str | None = "18.0",
+    intent: str | None = "migrate",
+    constraints: Any = None,
     strict: bool = True,
     include_compile_test: bool = False,
     continue_on_error: bool = True,
 ) -> dict[str, Any]:
+    intent = intent or "migrate"
     results: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
     aggregate = {"high": 0, "medium": 0, "low": 0}
@@ -1675,12 +1661,13 @@ def batch_assist_report_migration(
     client: OdooClient,
     sender_id: int,
     xmlids: list[str],
-    target_version: str = "18.0",
-    intent: str = "migrate",
-    constraints: dict[str, Any] | None = None,
+    target_version: str | None = "18.0",
+    intent: str | None = "migrate",
+    constraints: Any = None,
     strict: bool = True,
     continue_on_error: bool = True,
 ) -> dict[str, Any]:
+    intent = intent or "migrate"
     results: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
     aggregate = {"high": 0, "medium": 0, "low": 0}

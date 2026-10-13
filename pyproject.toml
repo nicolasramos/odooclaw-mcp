@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "odooclaw-mcp"
-version = "2.2.0"
+version = "2.3.0"
 description = "A modular, type-safe, and secure MCP server for interacting with Odoo 18 ORM"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -37,6 +37,7 @@ dev = [
   "black>=23.0.0",
   "ruff>=0.1.0",
   "mypy>=1.0.0",
+  "types-requests>=2.31.0",
   "pre-commit>=3.0.0",
   "build>=1.2.0",
   "twine>=5.0.0",
@@ -61,19 +62,8 @@ include = ["odoo_mcp*"]
 [tool.black]
 line-length = 100
 target-version = ["py311"]
-include = '\\.pyi?$'
-extend-exclude = '''
-/(
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
+include = '\.pyi?$'
+extend-exclude = '/(\.eggs|\.git|\.hg|\.mypy_cache|\.tox|\.venv|build|dist)/'
 
 [tool.ruff]
 line-length = 100

@@ -50,9 +50,7 @@ def test_create_helpdesk_ticket_returns_unsupported_when_missing_model(mock_clie
 
 
 def test_draft_ticket_email_returns_structured_draft(mock_client):
-    mock_client.try_get_model_fields.side_effect = lambda model, sender_id=None: {
-        "name": {}
-    }
+    mock_client.try_get_model_fields.side_effect = lambda model, sender_id=None: {"name": {}}
     mock_client.call_kw.side_effect = [
         [{"id": 12, "name": "Ticket 12", "partner_id": [44, "ACME"]}],
         [{"id": 44, "email": "ops@acme.test"}],

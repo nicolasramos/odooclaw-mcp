@@ -173,3 +173,6 @@ DRAFTS/
 
 # Claude specific
 .claude/
+
+# macOS AppleDouble artifacts (NAS SMB)
+._*
