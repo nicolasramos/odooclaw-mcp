@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
@@ -13,7 +13,7 @@ def find_task(
     project_id: int | None = None,
     stage_id: int | None = None,
     limit: int = 10,
-) -> Any:
+) -> list:
     domain: list[tuple[str, str, Any]] = []
     if name:
         domain.append(("name", "ilike", name))
@@ -23,15 +23,18 @@ def find_task(
         domain.append(("stage_id", "=", stage_id))
 
     _logger.info(f"Finding tasks with domain: {domain}")
-    return client.call_kw(
-        "project.task",
-        "search_read",
-        args=[domain],
-        kwargs={
-            "fields": ["id", "name", "project_id", "stage_id", "user_ids"],
-            "limit": limit,
-        },
-        sender_id=user_id,
+    return cast(
+        list[Any],
+        client.call_kw(
+            "project.task",
+            "search_read",
+            args=[domain],
+            kwargs={
+                "fields": ["id", "name", "project_id", "stage_id", "user_ids"],
+                "limit": limit,
+            },
+            sender_id=user_id,
+        ),
     )
 
 
@@ -43,7 +46,7 @@ def create_task(
     description: str | None = None,
     assigned_to: int | None = None,
     deadline: str | None = None,
-) -> Any:
+) -> int:
     values: dict[str, Any] = {"name": name}
     if project_id:
         values["project_id"] = project_id
@@ -55,7 +58,7 @@ def create_task(
         values["date_deadline"] = deadline
 
     _logger.info(f"Creating task '{name}'")
-    return client.call_kw("project.task", "create", args=[values], sender_id=user_id)
+    return cast(int, client.call_kw("project.task", "create", args=[values], sender_id=user_id))
 
 
 def update_task(
@@ -65,7 +68,7 @@ def update_task(
     stage_id: int | None = None,
     assigned_to: int | None = None,
     deadline: str | None = None,
-) -> Any:
+) -> bool:
     values: dict[str, Any] = {}
     if stage_id:
         values["stage_id"] = stage_id
@@ -78,7 +81,9 @@ def update_task(
         return True
 
     _logger.info(f"Updating task {task_id} with {values}")
-    return client.call_kw("project.task", "write", args=[[task_id], values], sender_id=user_id)
+    return cast(
+        bool, client.call_kw("project.task", "write", args=[[task_id], values], sender_id=user_id)
+    )
 
 
 def find_my_tasks(
@@ -89,7 +94,7 @@ def find_my_tasks(
     date_deadline_from: str | None = None,
     date_deadline_to: str | None = None,
     limit: int = 20,
-) -> Any:
+) -> list:
     domain: list[tuple[str, str, Any]] = [("user_ids", "in", [user_id])]
 
     if project_id:
@@ -104,24 +109,27 @@ def find_my_tasks(
         domain.append(("date_deadline", "<=", date_deadline_to))
 
     _logger.info(f"Finding my tasks for user {user_id} with domain: {domain}")
-    return client.call_kw(
-        "project.task",
-        "search_read",
-        args=[domain],
-        kwargs={
-            "fields": [
-                "id",
-                "name",
-                "project_id",
-                "stage_id",
-                "date_deadline",
-                "user_ids",
-                "priority",
-            ],
-            "limit": limit,
-            "order": "priority desc, date_deadline asc, id desc",
-        },
-        sender_id=user_id,
+    return cast(
+        list[Any],
+        client.call_kw(
+            "project.task",
+            "search_read",
+            args=[domain],
+            kwargs={
+                "fields": [
+                    "id",
+                    "name",
+                    "project_id",
+                    "stage_id",
+                    "date_deadline",
+                    "user_ids",
+                    "priority",
+                ],
+                "limit": limit,
+                "order": "priority desc, date_deadline asc, id desc",
+            },
+            sender_id=user_id,
+        ),
     )
 
 
@@ -220,13 +228,16 @@ def get_task_stats(
     "tareas abiertas del proyecto X"), this function builds the domains.
     """
 
-    def _count(domain: list[tuple[str, str, Any]]) -> Any:
-        return client.call_kw(
-            "project.task",
-            "search_count",
-            args=[domain],
-            kwargs={},
-            sender_id=user_id,
+    def _count(domain: list[tuple[str, str, Any]]) -> int:
+        return cast(
+            int,
+            client.call_kw(
+                "project.task",
+                "search_count",
+                args=[domain],
+                kwargs={},
+                sender_id=user_id,
+            ),
         )
 
     base: list[tuple[str, str, Any]] = []

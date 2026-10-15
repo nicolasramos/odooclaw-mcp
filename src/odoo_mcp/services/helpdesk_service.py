@@ -10,7 +10,7 @@ from odoo_mcp.services.capability_service import (
 _logger = get_logger("helpdesk_service")
 
 
-def _helpdesk_fields(client: OdooClient, user_id: int) -> Any:
+def _helpdesk_fields(client: OdooClient, user_id: int) -> dict | None:
     return client.try_get_model_fields("helpdesk.ticket", sender_id=user_id)
 
 

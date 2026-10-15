@@ -7,11 +7,11 @@ from odoo_mcp.services.capability_service import (
 )
 
 
-def _line_fields(client: OdooClient, user_id: int) -> Any:
+def _line_fields(client: OdooClient, user_id: int) -> dict | None:
     return client.try_get_model_fields("contract.line", sender_id=user_id)
 
 
-def _contract_fields(client: OdooClient, user_id: int) -> Any:
+def _contract_fields(client: OdooClient, user_id: int) -> dict | None:
     return client.try_get_model_fields("contract.contract", sender_id=user_id)
 
 
@@ -33,7 +33,7 @@ def _unsupported_contracts() -> dict:
 def create_contract_line(
     client: OdooClient,
     user_id: int,
-    contract_id: int | None = None,
+    contract_id: int | None,
     product_id: int | None = None,
     name: str | None = None,
     quantity: float | None = None,

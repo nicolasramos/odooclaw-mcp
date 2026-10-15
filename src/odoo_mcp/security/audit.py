@@ -1,7 +1,7 @@
-# The audit implementation logic is delegated to observability/audit.py
-# This serves as a namespace export for security boundary checks.
 from typing import Any
 
+# The audit implementation logic is delegated to observability/audit.py
+# This serves as a namespace export for security boundary checks.
 from odoo_mcp.observability.audit import log_audit_event
 
 

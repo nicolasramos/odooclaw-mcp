@@ -1,5 +1,5 @@
 import logging
-from typing import Any
+from typing import Any, cast
 
 from odoo_mcp.core.client import OdooClient
 
@@ -14,7 +14,7 @@ def create_lead(
     expected_revenue: float | None = None,
     probability: float | None = None,
     description: str | None = None,
-) -> Any:
+) -> int:
     """Create a new CRM lead/opportunity."""
     vals: dict[str, Any] = {
         "name": name,
@@ -31,8 +31,8 @@ def create_lead(
         vals["description"] = description
 
     try:
-        lead_id = client.call_kw("crm.lead", "create", args=[vals])
-        return lead_id
+        lead_id = client.call_kw("crm.lead", "create", sender_id=sender_id, args=[vals])
+        return cast(int, lead_id)
     except Exception as e:
         _logger.error(f"Error creating lead: {e}")
         raise

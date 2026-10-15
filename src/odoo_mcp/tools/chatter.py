@@ -1,5 +1,3 @@
-from typing import Any
-
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.security.audit import audit_action
 from odoo_mcp.security.guards import guard_model_access
@@ -20,7 +18,7 @@ def odoo_create_activity(
     note: str | None = None,
     assign_to: int | None = None,
     date_deadline: str | None = None,
-) -> Any:
+) -> int:
     guard_model_access(model, client, sender_id=user_id)
     audit_action("CREATE_ACTIVITY", user_id, model, [res_id], {"summary": summary})
     return create_activity(client, user_id, model, res_id, summary, note, assign_to, date_deadline)
@@ -28,7 +26,7 @@ def odoo_create_activity(
 
 def odoo_list_pending_activities(
     client: OdooClient, user_id: int, model: str | None = None, assign_to: int | None = None
-) -> Any:
+) -> list:
     if model:
         guard_model_access(model, client, sender_id=user_id)
     return list_pending_activities(client, user_id, model, assign_to)
@@ -45,7 +43,7 @@ def odoo_mark_activity_done(
 
 def odoo_post_chatter_message(
     client: OdooClient, user_id: int, model: str, res_id: int, body: str
-) -> Any:
+) -> int:
     guard_model_access(model, client, sender_id=user_id)
     audit_action("POST_CHATTER", user_id, model, [res_id], {"body_length": len(body)})
     return post_chatter_message(client, user_id, model, res_id, body)

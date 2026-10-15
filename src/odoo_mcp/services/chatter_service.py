@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
@@ -19,7 +19,7 @@ def create_activity(
     note: str | None = None,
     assign_to: int | None = None,
     date_deadline: str | None = None,
-) -> Any:
+) -> int:
     values = {
         "res_model": model,
         "res_id": res_id,
@@ -44,35 +44,38 @@ def create_activity(
         values["user_id"] = assign_to
 
     _logger.info(f"Creating activity for {model} id {res_id}")
-    return client.call_kw("mail.activity", "create", args=[values], sender_id=user_id)
+    return cast(int, client.call_kw("mail.activity", "create", args=[values], sender_id=user_id))
 
 
 def list_pending_activities(
     client: OdooClient, user_id: int, model: str | None = None, assign_to: int | None = None
-) -> Any:
-    domain: list[Any] = []
+) -> list:
+    domain: list[tuple[str, str, Any]] = []
     if model:
         domain.append(("res_model", "=", model))
     if assign_to:
         domain.append(("user_id", "=", assign_to))
 
     _logger.info(f"Listing pending activities with domain: {domain}")
-    return client.call_kw(
-        "mail.activity",
-        "search_read",
-        args=[domain],
-        kwargs={
-            "fields": [
-                "summary",
-                "note",
-                "date_deadline",
-                "res_model",
-                "res_name",
-                "user_id",
-                "state",
-            ]
-        },
-        sender_id=user_id,
+    return cast(
+        list[Any],
+        client.call_kw(
+            "mail.activity",
+            "search_read",
+            args=[domain],
+            kwargs={
+                "fields": [
+                    "summary",
+                    "note",
+                    "date_deadline",
+                    "res_model",
+                    "res_name",
+                    "user_id",
+                    "state",
+                ]
+            },
+            sender_id=user_id,
+        ),
     )
 
 
@@ -96,14 +99,17 @@ def mark_activity_done(
 
 def post_chatter_message(
     client: OdooClient, user_id: int, model: str, res_id: int, body: str
-) -> Any:
+) -> int:
     _logger.info(f"Posting chatter message on {model} id {res_id}")
-    return client.call_kw(
-        model,
-        "message_post",
-        args=[[res_id]],
-        kwargs={"body": body, "message_type": "comment"},
-        sender_id=user_id,
+    return cast(
+        int,
+        client.call_kw(
+            model,
+            "message_post",
+            args=[[res_id]],
+            kwargs={"body": body, "message_type": "comment"},
+            sender_id=user_id,
+        ),
     )
 
 

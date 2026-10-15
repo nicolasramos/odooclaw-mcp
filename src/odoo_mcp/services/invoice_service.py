@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
@@ -42,8 +42,7 @@ def find_pending_invoices(
     partner_id: int | None = None,
     move_type: str | None = "out_invoice",
     limit: int = 50,
-) -> Any:
-    move_type = move_type or "out_invoice"
+) -> list:
     """
     Find invoices pending payment in Odoo 18.
 
@@ -86,16 +85,19 @@ def find_pending_invoices(
     ]
 
     _logger.info(f"Finding pending invoices: move_type={move_type}, partner_id={partner_id}")
-    return client.call_kw(
-        "account.move",
-        "search_read",
-        args=[domain],
-        kwargs={"fields": fields, "limit": limit, "order": "invoice_date_due asc"},
-        sender_id=user_id,
+    return cast(
+        list[Any],
+        client.call_kw(
+            "account.move",
+            "search_read",
+            args=[domain],
+            kwargs={"fields": fields, "limit": limit, "order": "invoice_date_due asc"},
+            sender_id=user_id,
+        ),
     )
 
 
-def get_invoice_summary(client: OdooClient, user_id: int, move_id: int) -> Any:
+def get_invoice_summary(client: OdooClient, user_id: int, move_id: int) -> dict:
     """Get a complete summary of a specific invoice (account.move)."""
     fields = [
         "id",
@@ -139,7 +141,7 @@ def get_invoice_summary(client: OdooClient, user_id: int, move_id: int) -> Any:
         )
         invoice["lines"] = lines
 
-    return invoice
+    return cast(dict[Any, Any], invoice)
 
 
 def register_payment(

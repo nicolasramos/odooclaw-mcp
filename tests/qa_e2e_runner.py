@@ -3,15 +3,6 @@ import os
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
-from odoo_mcp.schemas.business import (
-    CreateActivitySchema,
-    FindSaleOrderSchema,
-    FindTaskSchema,
-    GetPartnerSummarySchema,
-    GetSaleOrderSummarySchema,
-    ListPendingActivitiesSchema,
-)
-from odoo_mcp.schemas.records import OdooSearchSchema
 from odoo_mcp.server import (
     get_odoo_client,
     odoo_create_activity,
@@ -48,9 +39,9 @@ def run_tests():
     # Find a partner
     res = None
     try:
-        res = odoo_search(OdooSearchSchema(model="res.partner", domain=[], limit=1, sender_id=uid))
+        res = odoo_search(model="res.partner", domain=[], limit=1, sender_id=uid)
         partner_id = res[0]
-        odoo_get_partner_summary(GetPartnerSummarySchema(partner_id=partner_id, sender_id=uid))
+        odoo_get_partner_summary(partner_id=partner_id, sender_id=uid)
         print_ok("3.1 Partner Summary (Válido)", f"Partner ID {partner_id}")
     except Exception as e:
         print_fail("3.1 Partner Summary (Válido)", f"{str(e)} res={repr(res)}")
@@ -58,7 +49,7 @@ def run_tests():
 
     # Inexistente
     try:
-        res = odoo_get_partner_summary(GetPartnerSummarySchema(partner_id=999999, sender_id=uid))
+        res = odoo_get_partner_summary(partner_id=999999, sender_id=uid)
         if isinstance(res, dict) and "error" in res:
             print_ok("3.1 Partner Inexistente", f"Respuesta de dict: {res['error']}")
         else:
@@ -69,9 +60,11 @@ def run_tests():
     # Crear Actividad
     try:
         act_id = odoo_create_activity(
-            CreateActivitySchema(
-                model="res.partner", res_id=partner_id, summary="Prueba E2E", sender_id=uid
-            )
+            model="res.partner",
+            res_id=partner_id,
+            summary="Prueba E2E",
+            note="QA runbook",
+            sender_id=uid,
         )
         print_ok("3.2 Crear Actividad", f"Creada con ID {act_id}")
     except Exception as e:
@@ -79,16 +72,14 @@ def run_tests():
 
     # Listar Actividades
     try:
-        acts = odoo_list_pending_activities(
-            ListPendingActivitiesSchema(model="res.partner", sender_id=uid)
-        )
+        acts = odoo_list_pending_activities(model="res.partner", sender_id=uid)
         print_ok("3.3 Listar Actividades Pts", f"Recuperadas: {len(acts)}")
     except Exception as e:
         print_fail("3.3 Listar Actividades Pts", str(e))
 
     # Tareas
     try:
-        tasks = odoo_find_task(FindTaskSchema(limit=3, sender_id=uid))
+        tasks = odoo_find_task(limit=3, sender_id=uid)
         print_ok("4.1 Buscar `project.task`", f"Encontradas {len(tasks)}")
     except Exception as e:
         if "Odoo Access/ORM Error" in str(e):
@@ -98,7 +89,7 @@ def run_tests():
 
     # Pedidos de venta
     try:
-        sales = odoo_find_sale_order(FindSaleOrderSchema(limit=3, sender_id=uid))
+        sales = odoo_find_sale_order(limit=3, sender_id=uid)
         print_ok("4.4 Buscar `sale.order`", f"Encontrados {len(sales)}")
     except Exception as e:
         if "Odoo Access/ORM Error" in str(e):
@@ -108,16 +99,15 @@ def run_tests():
 
     # Venta Inexistente
     try:
-        res = odoo_get_sale_order_summary(GetSaleOrderSummarySchema(order_id=999999, sender_id=uid))
+        res = odoo_get_sale_order_summary(order_id=999999, sender_id=uid)
         if isinstance(res, dict) and "error" in res:
-            print_ok("4.5 Sele Order Inexistente", f"Dict error: {res['error']}")
+            print_ok("4.5 Sale Order Inexistente", f"Dict error: {res['error']}")
         else:
-            print_fail("4.5 Sele Order Inexistente", "No lanzó error")
+            print_fail("4.5 Sale Order Inexistente", "No lanzó error")
     except Exception as e:
-        print_ok("4.5 Sele Order Inexistente", f"Rechazado correctamente: {str(e)[:50]}")
+        print_ok("4.5 Sale Order Inexistente", f"Rechazado correctamente: {str(e)[:50]}")
 
 
 print("Inicializando entorno Odoo y dependencias para pruebas E2E...")
 if __name__ == "__main__":
     run_tests()
-    print("\n🏁 Primera batería completada. Revisa los resultados y serializers. 🏁\n")

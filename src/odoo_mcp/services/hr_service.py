@@ -1,6 +1,6 @@
 import logging
 from datetime import date as date_cls
-from typing import Any
+from typing import Any, cast
 
 from odoo_mcp.core.client import OdooClient
 
@@ -12,7 +12,7 @@ def _resolve_employee_id(
     sender_id: int,
     employee_id: int | None = None,
     user_id: int | None = None,
-) -> Any:
+) -> int | None:
     if employee_id:
         return employee_id
 
@@ -25,7 +25,7 @@ def _resolve_employee_id(
         sender_id=sender_id,
     )
     if employees:
-        return employees[0].get("id")
+        return cast(int | None, employees[0].get("id"))
     return None
 
 
@@ -37,7 +37,7 @@ def find_attendance(
     date_from: str | None = None,
     date_to: str | None = None,
     limit: int = 50,
-) -> Any:
+) -> list:
     if not client.model_exists("hr.attendance", sender_id=sender_id):
         raise ValueError("Model hr.attendance is not available in this Odoo instance")
 
@@ -62,16 +62,19 @@ def find_attendance(
     ]
 
     _logger.info("Finding attendances with domain: %s", domain)
-    return client.call_kw(
-        "hr.attendance",
-        "search_read",
-        args=[domain],
-        kwargs={
-            "fields": ["id", "employee_id", "check_in", "check_out", "worked_hours"],
-            "limit": limit,
-            "order": "check_in desc",
-        },
-        sender_id=sender_id,
+    return cast(
+        list[Any],
+        client.call_kw(
+            "hr.attendance",
+            "search_read",
+            args=[domain],
+            kwargs={
+                "fields": ["id", "employee_id", "check_in", "check_out", "worked_hours"],
+                "limit": limit,
+                "order": "check_in desc",
+            },
+            sender_id=sender_id,
+        ),
     )
 
 
@@ -81,12 +84,11 @@ def log_timesheet(
     project_id: int,
     name: str,
     unit_amount: float,
-    date: str | None,
+    date: str | None = None,
     task_id: int | None = None,
     employee_id: int | None = None,
-) -> Any:
+) -> int:
     """Log a new timesheet entry."""
-    date = date or date_cls.today().isoformat()
     vals = {
         "project_id": project_id,
         "name": name,
@@ -103,7 +105,7 @@ def log_timesheet(
         timesheet_id = client.call_kw(
             "account.analytic.line", "create", sender_id=sender_id, args=[vals]
         )
-        return timesheet_id
+        return cast(int, timesheet_id)
     except Exception as e:
         _logger.error(f"Error logging timesheet: {e}")
         raise
@@ -117,7 +119,7 @@ def log_task_timesheet(
     unit_amount: float,
     date: str | None = None,
     employee_id: int | None = None,
-) -> Any:
+) -> int:
     if not client.model_exists("project.task", sender_id=sender_id):
         raise ValueError("Model project.task is not available in this Odoo instance")
     if not client.model_exists("account.analytic.line", sender_id=sender_id):
@@ -151,9 +153,12 @@ def log_task_timesheet(
         vals["employee_id"] = resolved_employee_id
 
     _logger.info("Logging task timesheet for task %s", task_id)
-    return client.call_kw(
-        "account.analytic.line",
-        "create",
-        sender_id=sender_id,
-        args=[vals],
+    return cast(
+        int,
+        client.call_kw(
+            "account.analytic.line",
+            "create",
+            sender_id=sender_id,
+            args=[vals],
+        ),
     )

@@ -1,5 +1,3 @@
-from typing import Any
-
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.security.audit import audit_action
 from odoo_mcp.security.guards import guard_model_access
@@ -13,7 +11,7 @@ def odoo_find_sale_order(
     partner_id: int | None = None,
     state: str | None = None,
     limit: int = 10,
-) -> Any:
+) -> list:
     guard_model_access("sale.order")
     return find_sale_order(client, user_id, name, partner_id, state, limit)
 

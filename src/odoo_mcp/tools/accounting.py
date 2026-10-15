@@ -25,7 +25,7 @@ def odoo_create_vendor_invoice(
     user_id: int,
     partner_id: int,
     lines: list,
-    ref: str | None = "",
+    ref: str = "",
     confirm: bool = False,
     dry_run: bool = True,
     total_tolerance: float = 0.01,
@@ -33,7 +33,6 @@ def odoo_create_vendor_invoice(
     confirm_partner_create: bool = False,
 ) -> dict:
     """Legacy wrapper routed through the validated vendor bill flow."""
-    ref = ref or ""
     audit_action(
         "CREATE_INVOICE_LEGACY_VALIDATED",
         user_id,

@@ -1,6 +1,6 @@
 from datetime import date as date_cls
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
@@ -8,7 +8,9 @@ from odoo_mcp.observability.logging import get_logger
 _logger = get_logger("workforce_service")
 
 
-def _resolve_employee_id(client: OdooClient, sender_id: int, employee_id: int | None = None) -> Any:
+def _resolve_employee_id(
+    client: OdooClient, sender_id: int, employee_id: int | None = None
+) -> int | None:
     if employee_id:
         return employee_id
 
@@ -20,7 +22,7 @@ def _resolve_employee_id(client: OdooClient, sender_id: int, employee_id: int | 
         sender_id=sender_id,
     )
     if employees:
-        return employees[0].get("id")
+        return cast(int | None, employees[0].get("id"))
     return None
 
 

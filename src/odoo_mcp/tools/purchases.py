@@ -1,5 +1,3 @@
-from typing import Any
-
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.security.audit import audit_action
 from odoo_mcp.services.purchase_service import (
@@ -15,7 +13,7 @@ from odoo_mcp.services.purchase_service import (
 
 def odoo_create_purchase_order(
     client: OdooClient, user_id: int, partner_id: int, lines: list
-) -> Any:
+) -> int:
     """Wrapper for odoo_create_purchase_order tool."""
     audit_action(
         "CREATE_PO",

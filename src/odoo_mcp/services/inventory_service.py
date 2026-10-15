@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.services.capability_service import (
@@ -1040,11 +1040,11 @@ def get_product_stock(
     sender_id: int,
     product_id: int,
     location_id: int | None = None,
-) -> Any:
+) -> list[dict[str, Any]]:
     result = get_product_stock_context(client, sender_id, product_id, location_id)
     if not result.get("ok"):
         raise ValueError(result.get("message", "Could not fetch product stock."))
-    return result.get("quants", [])
+    return cast(list[dict[str, Any]], result.get("quants", []))
 
 
 def _receipt_picking_fields(client: OdooClient, sender_id: int) -> list[str]:
@@ -1086,7 +1086,9 @@ def _read_receipt(client: OdooClient, sender_id: int, picking_id: int) -> dict[s
     return rows[0] if rows else {}
 
 
-def _read_receipt_moves(client: OdooClient, sender_id: int, picking_id: int) -> Any:
+def _read_receipt_moves(
+    client: OdooClient, sender_id: int, picking_id: int
+) -> list[dict[str, Any]]:
     if not _model_available(client, "stock.move", sender_id):
         return []
     fields = _available_fields(
@@ -1111,16 +1113,21 @@ def _read_receipt_moves(client: OdooClient, sender_id: int, picking_id: int) -> 
             "move_line_ids",
         ],
     )
-    return client.call_kw(
-        "stock.move",
-        "search_read",
-        args=[[["picking_id", "=", picking_id]]],
-        kwargs={"fields": fields, "order": "id asc"},
-        sender_id=sender_id,
+    return cast(
+        list[dict[str, Any]],
+        client.call_kw(
+            "stock.move",
+            "search_read",
+            args=[[["picking_id", "=", picking_id]]],
+            kwargs={"fields": fields, "order": "id asc"},
+            sender_id=sender_id,
+        ),
     )
 
 
-def _read_receipt_move_lines(client: OdooClient, sender_id: int, picking_id: int) -> Any:
+def _read_receipt_move_lines(
+    client: OdooClient, sender_id: int, picking_id: int
+) -> list[dict[str, Any]]:
     if not _model_available(client, "stock.move.line", sender_id):
         return []
     fields = _available_fields(
@@ -1141,12 +1148,15 @@ def _read_receipt_move_lines(client: OdooClient, sender_id: int, picking_id: int
             "location_dest_id",
         ],
     )
-    return client.call_kw(
-        "stock.move.line",
-        "search_read",
-        args=[[["picking_id", "=", picking_id]]],
-        kwargs={"fields": fields, "order": "id asc"},
-        sender_id=sender_id,
+    return cast(
+        list[dict[str, Any]],
+        client.call_kw(
+            "stock.move.line",
+            "search_read",
+            args=[[["picking_id", "=", picking_id]]],
+            kwargs={"fields": fields, "order": "id asc"},
+            sender_id=sender_id,
+        ),
     )
 
 
@@ -2171,11 +2181,11 @@ def _validate_picking(
     dry_run: bool,
     capability: str,
     prepare,
-) -> Any:
+) -> dict:
     plan = prepare(client, sender_id, picking_id)
     if not plan.get("ok"):
         plan["capability"] = capability
-        return plan
+        return cast(dict[Any, Any], plan)
     if dry_run:
         return build_success_response(capability, dry_run=True, validation_plan=plan)
     if not confirm:
@@ -2215,7 +2225,7 @@ def validate_delivery(
     picking_id: int,
     confirm: bool = False,
     dry_run: bool = True,
-) -> Any:
+) -> dict:
     return _validate_picking(
         client,
         sender_id,
@@ -2233,7 +2243,7 @@ def validate_transfer(
     picking_id: int,
     confirm: bool = False,
     dry_run: bool = True,
-) -> Any:
+) -> dict:
     return _validate_picking(
         client,
         sender_id,

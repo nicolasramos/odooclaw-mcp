@@ -1,45 +1,29 @@
-from typing import Any
+from typing import Any, cast
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.core.domains import validate_domain
 from odoo_mcp.core.exceptions import OdooRPCError
+from odoo_mcp.core.field_schema import (
+    get_field_schema,
+)
 from odoo_mcp.core.serializers import serialize_records
 from odoo_mcp.security.audit import audit_action
 from odoo_mcp.security.guards import guard_model_access, guard_write_fields
 from odoo_mcp.services.partner_service import find_existing_partner_id
 
-# Cache for validated field sets: {model_name: set_of_field_names}
-_field_cache: dict[str, set] = {}
-_FIELD_CACHE_TTL_SECONDS = 60.0
-_field_cache_timestamps: dict[str, float] = {}
+# ``_field_cache`` / ``_field_cache_timestamps`` come from
+# odoo_mcp.core.field_schema: the cache is shared with the summary services, so
+# one fields_get per model per 60s serves both validating a read and building a
+# summary. Tests clear it through this module, the path they already use.
 
 
 def _get_model_fields(client: OdooClient, model: str, sender_id: int) -> set:
     """Return the set of valid field names for *model* via fields_get.
 
-    Results are cached per model with a short TTL to avoid hammering
-    ir.model.fields on every read/search_read call.
+    Results come from the shared schema cache (60s TTL), so validating a read
+    and summarising a record never fetch the same schema twice.
     """
-    now = _field_cache_timestamps.get(model, 0.0)
-    if model in _field_cache and (now - _field_cache_timestamps[model]) < _FIELD_CACHE_TTL_SECONDS:
-        return _field_cache[model]
-
-    try:
-        fields_info = client.call_kw(model, "fields_get", sender_id=sender_id)
-        if isinstance(fields_info, dict):
-            result = set(fields_info.keys())
-        else:
-            result = set()
-    except Exception:
-        result = set()
-
-    _field_cache[model] = result
-    _field_cache_timestamps[model] = now if now else 0.0
-    # Store current time properly
-    import time
-
-    _field_cache_timestamps[model] = time.monotonic()
-    return result
+    return set(get_field_schema(client, model, sender_id))
 
 
 def _validate_fields(
@@ -87,12 +71,15 @@ def _validate_fields(
     return clean_fields
 
 
-def odoo_search(client: OdooClient, user_id: int, model: str, domain: list[Any], limit: int) -> Any:
+def odoo_search(
+    client: OdooClient, user_id: int, model: str, domain: list[Any], limit: int
+) -> list[int]:
     """Search for record IDs matching domain."""
-    guard_model_access(model, client, sender_id=user_id)
     validate_domain(domain)
-    return client.call_kw(
-        model, "search", args=[domain], kwargs={"limit": limit}, sender_id=user_id
+    guard_model_access(model, client, sender_id=user_id)
+    return cast(
+        list[int],
+        client.call_kw(model, "search", args=[domain], kwargs={"limit": limit}, sender_id=user_id),
     )
 
 
@@ -120,8 +107,8 @@ def odoo_search_read(
     limit: int = 80,
 ) -> list[dict[str, Any]]:
     """Search and read in a single call."""
-    guard_model_access(model, client, sender_id=user_id)
     validate_domain(domain)
+    guard_model_access(model, client, sender_id=user_id)
     clean = _validate_fields(client, model, fields, user_id)
     kwargs: dict[str, Any] = {"limit": limit}
     if clean:
@@ -130,7 +117,69 @@ def odoo_search_read(
     return serialize_records(records, model=model, base_url=client.odoo_session.url)
 
 
-def odoo_create(client: OdooClient, user_id: int, model: str, values: dict[str, Any]) -> Any:
+def list_installed_modules(client: OdooClient, user_id: int) -> list[dict[str, Any]]:
+    """Return installed modules as a list of dicts with id, name, state.
+
+    This is the read-only tool for module awareness — it queries
+    ir.module.module with state=installed and returns a safe,
+    filtered view (id + name only).  The model itself remains in
+    DEFAULT_DENIED_MODELS for write operations.
+    """
+    guard_model_access("ir.module.module", client, sender_id=user_id)
+    domain = [("state", "=", "installed")]
+    records = client.call_kw(
+        "ir.module.module",
+        "search_read",
+        args=[domain],
+        kwargs={"fields": ["id", "name"]},
+        sender_id=user_id,
+    )
+    return cast(list[dict[str, Any]], records)
+
+
+def _normalize_attachment_ids(values: dict[str, Any]) -> dict[str, Any]:
+    """Coerce `attachment_ids` into the flat list of ints `message_post` requires.
+
+    Odoo's `mail.thread.message_post` validates this field and rejects anything
+    that is not literally a list of ids:
+
+        if attachment_ids and not tools.is_list_of(attachment_ids, int):
+            raise ValueError(
+                _('Posting a message should receive attachments records as a '
+                  'list of IDs (received %(aids)s)'))
+
+    A model reaching for a relational field naturally emits the x2many command
+    form `[(6, 0, [id])]` — and that is exactly what this check rejects. Measured
+    against a real Odoo 17 (Odoo Server 17.0, ecosystem): the command form raises
+    `ValueError`, the bare list returns a message with the attachment linked.
+
+    Only rewrites what Odoo would reject; anything already valid is untouched.
+    """
+    if not isinstance(values, dict):
+        return values
+    raw = values.get("attachment_ids")
+    if not raw or not isinstance(raw, list):
+        return values
+
+    ids: list[int] = []
+    for item in raw:
+        if isinstance(item, int) and not isinstance(item, bool):
+            ids.append(item)
+        elif isinstance(item, (list, tuple)):
+            # x2many command: (6, 0, [ids]) / [6, 0, [ids]]
+            if len(item) == 3 and item[0] == 6 and isinstance(item[2], (list, tuple)):
+                ids.extend(i for i in item[2] if isinstance(i, int) and not isinstance(i, bool))
+        else:
+            # Unknown shape — leave the value alone rather than guess.
+            return values
+
+    if ids:
+        values = dict(values)
+        values["attachment_ids"] = ids
+    return values
+
+
+def odoo_create(client: OdooClient, user_id: int, model: str, values: dict[str, Any]) -> int:
     """Create a new record after checking allowlist."""
     guard_model_access(model, client, sender_id=user_id)
     audit_action("CREATE", user_id, model, [], values)
@@ -147,14 +196,17 @@ def odoo_create(client: OdooClient, user_id: int, model: str, values: dict[str, 
         if existing_partner_id:
             return existing_partner_id
 
-    return client.call_kw(model, "create", args=[values], sender_id=user_id)
+    if model == "mail.message":
+        values = _normalize_attachment_ids(values)
+
+    return cast(int, client.call_kw(model, "create", args=[values], sender_id=user_id))
 
 
 def odoo_write(
     client: OdooClient, user_id: int, model: str, ids: list[int], values: dict[str, Any]
-) -> Any:
+) -> bool:
     """Update records, respecting denylists and allowlists."""
     guard_model_access(model, client, sender_id=user_id)
     guard_write_fields(values)
     audit_action("WRITE", user_id, model, ids, values)
-    return client.call_kw(model, "write", args=[ids, values], sender_id=user_id)
+    return cast(bool, client.call_kw(model, "write", args=[ids, values], sender_id=user_id))

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
@@ -13,8 +13,8 @@ def find_sale_order(
     partner_id: int | None = None,
     state: str | None = None,
     limit: int = 10,
-) -> Any:
-    domain: list[Any] = []
+) -> list:
+    domain: list[tuple[str, str, Any]] = []
     if name:
         domain.append(("name", "ilike", name))
     if partner_id:
@@ -23,15 +23,18 @@ def find_sale_order(
         domain.append(("state", "=", state))
 
     _logger.info(f"Finding sale orders with domain: {domain}")
-    return client.call_kw(
-        "sale.order",
-        "search_read",
-        args=[domain],
-        kwargs={
-            "fields": ["id", "name", "partner_id", "state", "amount_total", "date_order"],
-            "limit": limit,
-        },
-        sender_id=user_id,
+    return cast(
+        list[Any],
+        client.call_kw(
+            "sale.order",
+            "search_read",
+            args=[domain],
+            kwargs={
+                "fields": ["id", "name", "partner_id", "state", "amount_total", "date_order"],
+                "limit": limit,
+            },
+            sender_id=user_id,
+        ),
     )
 
 
@@ -96,7 +99,7 @@ def get_sale_order_summary(client: OdooClient, user_id: int, order_id: int) -> d
     }
 
 
-def create_sale_order(client: OdooClient, sender_id: int, partner_id: int, lines: list) -> Any:
+def create_sale_order(client: OdooClient, sender_id: int, partner_id: int, lines: list) -> int:
     """Create a new sale.order with the provided lines."""
     order_vals: dict[str, Any] = {"partner_id": partner_id, "order_line": []}
 
@@ -112,7 +115,7 @@ def create_sale_order(client: OdooClient, sender_id: int, partner_id: int, lines
         order_vals["order_line"].append((0, 0, line_vals))
 
     order_id = client.call_kw("sale.order", "create", args=[order_vals], sender_id=sender_id)
-    return order_id
+    return cast(int, order_id)
 
 
 def confirm_sale_order(client: OdooClient, sender_id: int, order_id: int) -> bool:

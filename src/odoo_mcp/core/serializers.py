@@ -36,7 +36,7 @@ def serialize_records(
     """
     res = []
     for r in records:
-        cleaned = {}
+        cleaned: dict[str, Any] = {}
         for k, v in r.items():
             # Example: clean up binary data or long html
             if isinstance(v, str) and len(v) > 2000 and "html" in k.lower():
@@ -44,7 +44,7 @@ def serialize_records(
             else:
                 cleaned[k] = v
         if model and base_url and cleaned.get("id") is not None:
-            url = build_record_url(base_url, model, int(cleaned["id"]))
+            url = build_record_url(base_url, model, cleaned["id"])
             if url:
                 cleaned[RECORD_URL_KEY] = url
         res.append(cleaned)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from odoo_mcp.core.client import OdooClient
 from odoo_mcp.observability.logging import get_logger
@@ -89,7 +89,7 @@ def _oca_purchase_capabilities(client: OdooClient, sender_id: int) -> dict[str, 
     }
 
 
-def create_purchase_order(client: OdooClient, user_id: int, partner_id: int, lines: list) -> Any:
+def create_purchase_order(client: OdooClient, user_id: int, partner_id: int, lines: list) -> int:
     """
     Creates a purchase order with multiple lines.
     lines format: [{"product_id": 1, "product_qty": 2.0, "price_unit": 100.0}]
@@ -110,7 +110,9 @@ def create_purchase_order(client: OdooClient, user_id: int, partner_id: int, lin
         )
 
     _logger.info(f"Creating PO for partner {partner_id} with {len(lines)} lines")
-    return client.call_kw("purchase.order", "create", args=[order_vals], sender_id=user_id)
+    return cast(
+        int, client.call_kw("purchase.order", "create", args=[order_vals], sender_id=user_id)
+    )
 
 
 def find_purchase_order(
@@ -205,7 +207,9 @@ def _read_purchase_order(client: OdooClient, sender_id: int, order_id: int) -> d
     return rows[0] if rows else {}
 
 
-def _read_purchase_order_lines(client: OdooClient, sender_id: int, order_id: int) -> Any:
+def _read_purchase_order_lines(
+    client: OdooClient, sender_id: int, order_id: int
+) -> list[dict[str, Any]]:
     if not _model_available(client, "purchase.order.line", sender_id):
         return []
     fields = _available_fields(
@@ -228,12 +232,15 @@ def _read_purchase_order_lines(client: OdooClient, sender_id: int, order_id: int
             "date_planned",
         ],
     )
-    return client.call_kw(
-        "purchase.order.line",
-        "search_read",
-        args=[[["order_id", "=", order_id]]],
-        kwargs={"fields": fields, "order": "id asc"},
-        sender_id=sender_id,
+    return cast(
+        list[dict[str, Any]],
+        client.call_kw(
+            "purchase.order.line",
+            "search_read",
+            args=[[["order_id", "=", order_id]]],
+            kwargs={"fields": fields, "order": "id asc"},
+            sender_id=sender_id,
+        ),
     )
 
 
