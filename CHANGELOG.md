@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-11-02
+
+### Added
+- `odoo_create_invoice_from_sale_order`: creates the customer invoice for a confirmed sale order. Odoo 18 rejects remote calls to private methods, so `sale.order._create_invoices` is unreachable over RPC; the tool builds the `out_invoice` from the order lines (product, quantity, price, discount, taxes) and refuses draft or already-invoiced orders.
+- 5 tests covering the happy path, unconfirmed order, already-invoiced order, order without lines and missing order.
+
+### Verified
+- On Odoo 18 with LFM3-1.7B over oMLX: order confirmed, invoice created, posted and paid from the chat.
+
 ## [2.3.0] - 2026-08-14
 
 ### Added
